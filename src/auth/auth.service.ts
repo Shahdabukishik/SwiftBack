@@ -20,6 +20,7 @@ import { LoginDto } from './dto/login.dto';
 
 import { RegisterDto } from './dto/register.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { ChangePasswordDto } from './dto/change-password.dto ';
 
 
 @Injectable()
@@ -126,12 +127,14 @@ export class AuthService {
 
 
   async forgotPassword(
+    userId: string,
     dto: ForgotPasswordDto,
   ) {
     const user =
       await this.prisma.user.findUnique({
         where: {
           phone: dto.phone,
+          id: userId,
         },
       });
 
@@ -168,39 +171,49 @@ export class AuthService {
 
 
   async verifyOtp(
+    userId: string,
     dto: VerifyOtpDto,
   ) {
-    const user =
-      await this.prisma.user.findUnique({
-        where: {
-          phone: dto.phone,
-        },
-      });
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
 
     if (!user) {
-      throw new NotFoundException();
+      throw new NotFoundException('User not found');
     }
 
     if (user.otpCode !== dto.otp) {
-      throw new BadRequestException(
-        'Invalid OTP',
-      );
+      throw new BadRequestException('Invalid OTP');
     }
 
     if (
       !user.otpExpiresAt ||
       user.otpExpiresAt < new Date()
     ) {
-      throw new BadRequestException(
-        'OTP expired',
-      );
+      throw new BadRequestException('OTP expired');
     }
 
-    const resetToken =
-      this.jwtService.sign({
-        userId: user.id,
+    const resetToken = await this.jwtService.signAsync(
+      {
+        sub: user.id,
         purpose: 'reset-password',
-      });
+      },
+      {
+        expiresIn: '10m',
+      },
+    );
+
+    await this.prisma.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        otpCode: null,
+        otpExpiresAt: null,
+      },
+    });
 
     return {
       resetToken,
@@ -208,13 +221,62 @@ export class AuthService {
   }
 
 
-  async resetPassword(
-    dto: ResetPasswordDto,
+  async resetPassword(dto: ResetPasswordDto) {
+    const payload = await this.jwtService.verifyAsync(
+      dto.resetToken,
+    );
+
+    if (payload.purpose !== 'reset-password') {
+      throw new UnauthorizedException();
+    }
+
+    const hashedPassword = await bcrypt.hash(
+      dto.newPassword,
+      10,
+    );
+
+    await this.prisma.user.update({
+      where: {
+        id: payload.sub,
+      },
+      data: {
+        password: hashedPassword,
+      },
+    });
+
+    return {
+      message: 'Password updated successfully',
+    };
+  }
+
+
+  async changePassword(
+    userId: string,
+    dto: ChangePasswordDto,
   ) {
-    const payload =
-      this.jwtService.verify(
-        dto.resetToken,
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(
+        'User not found',
       );
+    }
+
+    const isPasswordValid =
+      await bcrypt.compare(
+        dto.currentPassword,
+        user.password,
+      );
+
+    if (!isPasswordValid) {
+      throw new BadRequestException(
+        'Current password is incorrect',
+      );
+    }
 
     const hashedPassword =
       await bcrypt.hash(
@@ -224,19 +286,17 @@ export class AuthService {
 
     await this.prisma.user.update({
       where: {
-        id: payload.userId,
+        id: user.id,
       },
       data: {
         password: hashedPassword,
-        otpCode: null,
-        otpExpiresAt: null,
       },
     });
 
     return {
+      
       message:
-        'Password reset successfully',
+        'Password changed successfully',
     };
   }
-
 }
