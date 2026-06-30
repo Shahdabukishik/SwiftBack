@@ -7,12 +7,14 @@ import {
   Patch,
   UseGuards,
   Req,
+  Delete,
 } from '@nestjs/common';
 
 import { ForbiddenException } from '@nestjs/common';
 import { LoginDto } from './dto/login.dto';
 
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { ResetPasswordGuard } from './guards/reset-password.guard';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -54,35 +56,43 @@ export class AuthController {
 
 
   @Version('1')
-  @Post(':userId/forgot-password')
+  @Post('forgot-password')
   forgotPassword(
-    @Param('userId') userId: string,
     @Body()
     dto: ForgotPasswordDto,
   ) {
-    return this.authService.forgotPassword(userId, dto);
+    return this.authService.forgotPassword(dto);
   }
 
 
   @Version('1')
-  @Post(':userId/verify-otp')
+  @Post('verify-otp')
   verifyOtp(
-    @Param('userId') userId: string,
-    @Body()
-    dto: VerifyOtpDto,
-
+    @Body() dto: VerifyOtpDto,
   ) {
-    return this.authService.verifyOtp(userId, dto);
+    return this.authService.verifyOtp(dto);
   }
 
   @Version('1')
   @Post(':userId/reset-password')
+  @ApiBearerAuth()
+  @UseGuards(ResetPasswordGuard)
   resetPassword(
     @Param('userId') userId: string,
+    @Req() req,
     @Body()
     dto: ResetPasswordDto,
   ) {
-    return this.authService.resetPassword(dto);
+    if (req.user.sub !== userId) {
+      throw new ForbiddenException(
+        'Reset token does not match the requested user.',
+      );
+    }
+
+    return this.authService.resetPassword(
+      dto,
+      req.user,
+    );
   }
 
 
@@ -108,4 +118,24 @@ export class AuthController {
     );
   }
 
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Delete(':userId/delete-account')
+  async deleteAccount(
+    @Param('userId') id: string,
+    @Req() req: any,
+  ) {
+    const userId = req.user.sub;
+
+    if (userId !== id) {
+      throw new ForbiddenException(
+        'You are not allowed to delete this account',
+      );
+    }
+
+    return this.authService.deleteAccount(userId);
+  }
+
 }
+
+

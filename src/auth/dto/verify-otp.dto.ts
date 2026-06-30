@@ -1,17 +1,17 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsInt } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, Length } from 'class-validator';
 
 export class VerifyOtpDto {
   @ApiProperty({
     example: '0599999999',
   })
+  @IsString()
   phone!: string;
 
   @ApiProperty({
-    example: 1234,
+    example: '0000',
   })
-  @Type(() => Number)
-  @IsInt()
-  otp!: number;
+  @IsString()
+  @Length(4, 4)
+  otp!: string;
 }

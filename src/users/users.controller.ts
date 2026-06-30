@@ -20,12 +20,12 @@ export class UsersController {
   }
 
   @Version('1')
-  @Get(':id')
+  @Get(':userId')
   @ApiOperation({ summary: 'Get user by id' })
   @ApiResponse({ status: 200, description: 'User returned successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('userId') id: string) {
     return await this.usersService.findOne(id);
   }
 }

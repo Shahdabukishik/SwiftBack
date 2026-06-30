@@ -8,6 +8,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SmsService } from './services/sms.service';
+import { ResetPasswordGuard } from './guards/reset-password.guard';
 
 @Module({
   imports: [ PrismaModule,
@@ -26,6 +27,6 @@ import { SmsService } from './services/sms.service';
   }),
 }),],
   controllers: [AuthController],
-  providers: [AuthService,  JwtStrategy,SmsService],
+  providers: [AuthService,  JwtStrategy,SmsService, ResetPasswordGuard],
 })
 export class AuthModule {}
