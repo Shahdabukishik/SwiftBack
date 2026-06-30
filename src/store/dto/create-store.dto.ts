@@ -13,12 +13,6 @@ export class CreateStoreDto {
   @IsNotEmpty()
   name!: string;
 
-  @ApiProperty({
-    example: ['https://example.com/image1.jpg', 'https://example.com/image2.jpg'],
-  })
-  @IsArray()
-  @IsString({ each: true })
-  images!: string[];
 
   @ApiProperty({
     example: '123 Main St, City, State 12345',
