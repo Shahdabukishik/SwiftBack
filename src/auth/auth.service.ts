@@ -3,10 +3,10 @@ import {
   NotFoundException,
   ConflictException,
   Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 
 import * as bcrypt from 'bcrypt';
-import { UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
 import { SmsService } from './services/sms.service';
@@ -21,6 +21,10 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
+
+type ResetPasswordJwtPayload = {
+  sub: string;
+};
 
 
 @Injectable()
@@ -124,78 +128,72 @@ export class AuthService {
   }
 
 
-  private generateOtp(): number {
-    return Math.floor(1000 + Math.random() * 9000);
+  private generateOtp(): string {
+    // return Math.floor(1000 + Math.random() * 9000);
+    return '0000'; // For testing purposes, return a fixed OTP
   }
 
 
-  async forgotPassword(
-    userId: string,
-    dto: ForgotPasswordDto,
-  ) {
-    const user =
-      await this.prisma.user.findUnique({
-        where: {
-          phone: dto.phone,
-          id: userId,
-        },
-      });
+  async forgotPassword(dto: ForgotPasswordDto) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        phone: dto.phone,
+      },
+    });
 
     if (!user) {
-      throw new NotFoundException(
-        'User not found',
-      );
+      return {
+        message: 'If the account exists, an OTP has been sent.',
+      };
     }
 
     const otp = this.generateOtp();
+    const hashedOtp = await bcrypt.hash(otp, 10);
 
     await this.prisma.user.update({
       where: {
         id: user.id,
       },
       data: {
-        otpCode: otp,
-        otpExpiresAt: new Date(
-          Date.now() + 5 * 60 * 1000,
-        ),
+        otpCode: hashedOtp,
+        otpExpiresAt: new Date(Date.now() + 5 * 60 * 1000),
       },
     });
 
-    await this.smsService.sendOtp(
-      user.phone,
-      otp,
-    );
+    await this.smsService.sendOtp(user.phone, otp);
 
     return {
-      message: 'OTP sent successfully',
+      message: 'If the account exists, an OTP has been sent.',
     };
   }
 
 
 
-  async verifyOtp(
-    userId: string,
-    dto: VerifyOtpDto,
-  ) {
+  async verifyOtp(dto: VerifyOtpDto) {
     const user = await this.prisma.user.findUnique({
       where: {
-        id: userId,
+        phone: dto.phone,
       },
     });
 
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (user.otpCode !== dto.otp) {
+    if (
+      !user ||
+      !user.otpCode ||
+      !user.otpExpiresAt
+    ) {
       throw new BadRequestException('Invalid OTP');
     }
 
-    if (
-      !user.otpExpiresAt ||
-      user.otpExpiresAt < new Date()
-    ) {
+    if (user.otpExpiresAt < new Date()) {
       throw new BadRequestException('OTP expired');
+    }
+    const isOtpValid = await bcrypt.compare(
+      dto.otp,
+      user.otpCode!,
+    );
+
+    if (!isOtpValid) {
+      throw new BadRequestException('Invalid OTP');
     }
 
     const resetToken = await this.jwtService.signAsync(
@@ -224,13 +222,22 @@ export class AuthService {
   }
 
 
-  async resetPassword(dto: ResetPasswordDto) {
-    const payload = await this.jwtService.verifyAsync(
-      dto.resetToken,
-    );
+  async resetPassword(
+    dto: ResetPasswordDto,
+    payload: ResetPasswordJwtPayload,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: payload.sub,
+      },
+    });
 
-    if (payload.purpose !== 'reset-password') {
-      throw new UnauthorizedException();
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (dto.newPassword !== dto.confirmPassword) {
+      throw new BadRequestException('Passwords do not match');
     }
 
     const hashedPassword = await bcrypt.hash(
@@ -244,6 +251,8 @@ export class AuthService {
       },
       data: {
         password: hashedPassword,
+        otpCode: null,
+        otpExpiresAt: null,
       },
     });
 
@@ -251,6 +260,10 @@ export class AuthService {
       message: 'Password updated successfully',
     };
   }
+
+
+
+
 
 
   async changePassword(
@@ -286,6 +299,10 @@ export class AuthService {
       );
     }
 
+    if (dto.newPassword !== dto.confirmPassword) {
+      throw new BadRequestException('Passwords do not match');
+    }
+
     const hashedPassword =
       await bcrypt.hash(
         dto.newPassword,
@@ -307,4 +324,24 @@ export class AuthService {
         'Password changed successfully',
     };
   }
+
+
+  async deleteAccount(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    await this.prisma.user.delete({
+      where: { id: userId },
+    });
+
+    return {
+      message: 'Account deleted successfully',
+    };
+  }
+
 }

@@ -4,7 +4,7 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class SmsService {
-  async sendOtp(phone: string, otp: number) {
+  async sendOtp(phone: string, otp: string) {
     console.log(`OTP ${otp} sent to ${phone}`);
 
     // Twilio 
