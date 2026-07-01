@@ -119,14 +119,15 @@ export class AuthController {
   }
 
   @ApiBearerAuth()
+  @Version('1')
   @UseGuards(JwtAuthGuard)
   @Delete(':userId/delete-account')
   async deleteAccount(
     @Param('userId') id: string,
-    @Req() req: any,
   ) {
-    const userId = req.user.sub;
+    const userId = id;
 
+    
     if (userId !== id) {
       throw new ForbiddenException(
         'You are not allowed to delete this account',

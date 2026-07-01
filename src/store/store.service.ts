@@ -56,29 +56,97 @@ export class StoreService {
         });
     }
 
-    async upload(file: StoreImageUpload) {
+    async uploadImages(
+        userId: string,
+        id: string,
+        files: Express.Multer.File[],
+    ) {
+        const store = await this.prisma.store.findUnique({
+            where: { id },
+        });
 
-        const fileName =
-            `${Date.now()}-${file.originalname}`;
+        if (!store) {
+            throw new NotFoundException('Store not found');
+        }
 
-        const { data, error } =
-            await this.supabase.client.storage
-                .from("store-images")
+
+        const uploadedUrls: string[] = [];
+
+        for (const file of files) {
+            const fileName = `${Date.now()}-${file.originalname}`;
+
+            const { error } = await this.supabase.client.storage
+                .from('store-images')
                 .upload(fileName, file.buffer, {
                     contentType: file.mimetype,
                 });
+
+            if (error) {
+                throw new BadRequestException(error.message);
+            }
+
+            const { data } = this.supabase.client.storage
+                .from('store-images')
+                .getPublicUrl(fileName);
+
+            uploadedUrls.push(data.publicUrl);
+        }
+
+        const updatedStore = await this.prisma.store.update({
+            where: { id },
+            data: {
+                images: {
+                    push: uploadedUrls, 
+                },
+            },
+        });
+
+        return {
+            uploaded: uploadedUrls,
+            store: updatedStore,
+        };
+    }
+
+    async removeImage(
+        userId: string,
+        storeId: string,
+        imageUrl: string,
+    ) {
+        const store = await this.prisma.store.findUnique({
+            where: { id: storeId },
+        });
+
+        if (!store) {
+            throw new NotFoundException('Store not found');
+        }
+
+       
+
+       
+        const fileName = imageUrl.split('/').pop();
+
+
+        const { error } = await this.supabase.client.storage
+            .from('store-images')
+            .remove([fileName]);
 
         if (error) {
             throw new BadRequestException(error.message);
         }
 
-        const { data: publicUrl } =
-            this.supabase.client.storage
-                .from("store-images")
-                .getPublicUrl(fileName);
+        
+        const updatedStore = await this.prisma.store.update({
+            where: { id: storeId },
+            data: {
+                images: {
+                    set: store.images.filter((img) => img !== imageUrl),
+                },
+            },
+        });
 
         return {
-            image: publicUrl.publicUrl,
+            message: 'Image deleted successfully',
+            store: updatedStore,
         };
     }
 }
