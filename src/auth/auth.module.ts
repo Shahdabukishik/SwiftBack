@@ -9,24 +9,20 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SmsService } from './services/sms.service';
 import { ResetPasswordGuard } from './guards/reset-password.guard';
+import { StringValue } from 'ms';
 
 @Module({
-  imports: [ PrismaModule,
+  imports: [PrismaModule,
 
-  JwtModule.registerAsync({
-  imports: [ConfigModule],
 
-  inject: [ConfigService],
-
-  useFactory: (configService: ConfigService) => ({
-    secret: configService.get<string>('JWT_SECRET'),
-
-    signOptions: {
-      expiresIn: '1d',
-    },
-  }),
-}),],
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET')!,
+      }),
+    }),],
   controllers: [AuthController],
-  providers: [AuthService,  JwtStrategy,SmsService, ResetPasswordGuard],
+  providers: [AuthService, JwtStrategy, SmsService, ResetPasswordGuard],
 })
-export class AuthModule {}
+export class AuthModule { }

@@ -12,7 +12,8 @@ import { StoreService } from './store.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { UploadedFiles, UseInterceptors,BadRequestException } from '@nestjs/common';
+
 import {
     ApiBody,
     ApiConsumes,
@@ -30,7 +31,7 @@ export class StoreController {
     constructor(private readonly storeService: StoreService) { }
 
 
-    @Post(':id/upload-images')
+    @Post(':storeId/upload-images')
     @ApiBearerAuth()
     @UseGuards(JwtAuthGuard)
     @ApiConsumes('multipart/form-data')
@@ -48,22 +49,47 @@ export class StoreController {
             },
         },
     })
-    @UseInterceptors(FilesInterceptor('images', 10)) // max 10 images
+  @UseInterceptors(
+  FilesInterceptor('images', 10, {
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5 MB
+      files: 10,
+    },
+    fileFilter: (req, file, cb) => {
+      if (
+        ![
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+        ].includes(file.mimetype)
+      ) {
+        return cb(
+          new BadRequestException(
+            'Only JPG, PNG and WEBP images are allowed',
+          ),
+          false,
+        );
+      }
+
+      cb(null, true);
+    },
+  }),
+) 
     uploadImages(
         @Req() req,
-        @Param('id') id: string,
+        @Param('storeId') id: string,
         @UploadedFiles() files: Express.Multer.File[],
     ) {
         return this.storeService.uploadImages(req.user.userId, id, files);
     }
 
 
-    @Delete(':id/images')
+    @Delete(':storeId/images')
     @ApiBearerAuth()
     @UseGuards(JwtAuthGuard)
     removeImage(
         @Req() req,
-        @Param('id') id: string,
+        @Param('storeId') id: string,
         @Body() dto: DeleteStoreImageDto,
     ) {
         return this.storeService.removeImage(
@@ -81,32 +107,30 @@ export class StoreController {
         return this.storeService.create(dto);
     }
 
-    @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard)
+    
     @Get()
     findAll() {
         return this.storeService.findAll();
     }
 
-    @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard)
-    @Get(':id')
-    findOne(@Param('id') id: string) {
+    
+    @Get(':storeId')
+    findOne(@Param('storeId') id: string) {
         return this.storeService.findOne(id);
     }
 
     @ApiBearerAuth()
     @UseGuards(JwtAuthGuard)
-    @Delete(':id')
-    remove(@Param('id') id: string) {
+    @Delete(':storeId')
+    remove(@Param('storeId') id: string) {
         return this.storeService.remove(id);
     }
 
     @ApiBearerAuth()
     @UseGuards(JwtAuthGuard)
-    @Patch(':id')
+    @Patch(':storeId')
     update(
-        @Param('id') id: string,
+        @Param('storeId') id: string,
         @Body() dto: UpdateStoreDto,
     ) {
         return this.storeService.update(id, dto);

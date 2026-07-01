@@ -106,7 +106,7 @@ export class AuthController {
     @Req() req,
     @Body() dto: ChangePasswordDto,
   ) {
-    console.log(req.user);
+    
     if (req.user.userId !== userId) {
       throw new ForbiddenException(
         'You are not allowed to change another user password.',

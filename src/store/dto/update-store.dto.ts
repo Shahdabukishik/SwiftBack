@@ -13,13 +13,6 @@ export class UpdateStoreDto {
   @IsString()
   name?: string;
 
-  @ApiProperty({
-    example: ['https://example.com/image1.jpg', 'https://example.com/image2.jpg'],
-  })
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  images?: string[];
 
   @ApiProperty({
     example: '123 Main St, Anytown, USA',

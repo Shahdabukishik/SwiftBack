@@ -32,4 +32,5 @@ export class JwtStrategy extends PassportStrategy(
     dateOfBirth: payload.dateOfBirth,
   };
   }
+  
 }

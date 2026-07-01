@@ -8,9 +8,9 @@ import {
 
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
-
+import { StringValue } from 'ms';
 import { SmsService } from './services/sms.service';
-
+import { ConfigService } from '@nestjs/config';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -34,6 +34,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly smsService: SmsService,
+    private readonly configService: ConfigService,
   ) { }
 
 
@@ -68,7 +69,7 @@ export class AuthService {
       },
     });
 
-    console.log('DATABASE_URL =', process.env.DATABASE_URL);
+
     return {
       message: 'User created successfully',
       userId: createdUser.id,
@@ -81,8 +82,7 @@ export class AuthService {
 
   async login(loginDto: LoginDto) {
     const { phone, password } = loginDto;
-    console.log('JWT_SECRET:', process.env.JWT_SECRET);
-    console.log('JWT_SERVICE:', this.jwtService);
+   
 
     const user = await this.prisma.user.findUnique({
       where: {
@@ -116,12 +116,16 @@ export class AuthService {
       dateOfBirth: user.dateOfBirth,
     };
 
-    console.log(process.env.JWT_SECRET);
-    const accessToken =
-      await this.jwtService.signAsync(
-        payload,
-      );
 
+    
+    const accessToken = await this.jwtService.signAsync(payload, {
+      secret: this.configService.get<string>('JWT_SECRET')!,
+      expiresIn: this.configService.get<string>(
+        'JWT_EXPIRATION_TIME',
+      ) as StringValue,
+    });
+
+    
     return {
       access_token: accessToken,
     };
@@ -202,6 +206,7 @@ export class AuthService {
         purpose: 'reset-password',
       },
       {
+        secret: this.configService.get<string>('JWT_SECRET')!,
         expiresIn: '10m',
       },
     );
