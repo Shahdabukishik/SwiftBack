@@ -5,6 +5,7 @@ import { UpdateStoreDto } from './dto/update-store.dto';
 import { NotFoundException } from '@nestjs/common';
 import { BadRequestException } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
+import { StoreImagesService } from 'src/store-images/store-images.service';
 
 interface StoreImageUpload {
     originalname: string;
@@ -16,7 +17,8 @@ interface StoreImageUpload {
 export class StoreService {
     constructor(
         private prisma: PrismaService,
-        private supabase: SupabaseService
+        private supabase: SupabaseService,
+        private readonly storeImagesService: StoreImagesService,
     ) { }
 
     async create(dto: CreateStoreDto) {
@@ -26,19 +28,53 @@ export class StoreService {
     }
 
     async findAll() {
-        return this.prisma.store.findMany();
+        return this.prisma.store.findMany(
+            {
+                include: {
+                    images: true,
+                },
+            }
+        );
     }
 
     async findOne(id: string) {
         return this.prisma.store.findUnique({
             where: { id },
+            include: {
+                images: true,
+            },
         });
     }
 
     async remove(id: string) {
-        return this.prisma.store.delete({
+        const store = await this.prisma.store.findUnique({
+            where: { id },
+            include: {
+                images: {
+                    select: {
+                        id: true,
+                    },
+                },
+            },
+        });
+
+        if (!store) {
+            throw new NotFoundException('Store not found');
+        }
+
+        if (store.images.length > 0) {
+            await this.storeImagesService.deleteImages(
+                store.images.map((image) => image.id),
+            );
+        }
+
+        await this.prisma.store.delete({
             where: { id },
         });
+
+        return {
+            message: 'Store deleted successfully',
+        };
     }
 
     async update(id: string, dto: UpdateStoreDto) {
@@ -56,97 +92,6 @@ export class StoreService {
         });
     }
 
-    async uploadImages(
-        userId: string,
-        id: string,
-        files: Express.Multer.File[],
-    ) {
-        const store = await this.prisma.store.findUnique({
-            where: { id },
-        });
-
-        if (!store) {
-            throw new NotFoundException('Store not found');
-        }
 
 
-        const uploadedUrls: string[] = [];
-
-        for (const file of files) {
-            const fileName = `${Date.now()}-${file.originalname}`;
-
-            const { error } = await this.supabase.client.storage
-                .from('store-images')
-                .upload(fileName, file.buffer, {
-                    contentType: file.mimetype,
-                });
-
-            if (error) {
-                throw new BadRequestException(error.message);
-            }
-
-            const { data } = this.supabase.client.storage
-                .from('store-images')
-                .getPublicUrl(fileName);
-
-            uploadedUrls.push(data.publicUrl);
-        }
-
-        const updatedStore = await this.prisma.store.update({
-            where: { id },
-            data: {
-                images: {
-                    push: uploadedUrls, 
-                },
-            },
-        });
-
-        return {
-            uploaded: uploadedUrls,
-            store: updatedStore,
-        };
-    }
-
-    async removeImage(
-        userId: string,
-        storeId: string,
-        imageUrl: string,
-    ) {
-        const store = await this.prisma.store.findUnique({
-            where: { id: storeId },
-        });
-
-        if (!store) {
-            throw new NotFoundException('Store not found');
-        }
-
-       
-
-       
-        const fileName = imageUrl.split('/').pop();
-
-
-        const { error } = await this.supabase.client.storage
-            .from('store-images')
-            .remove([fileName]);
-
-        if (error) {
-            throw new BadRequestException(error.message);
-        }
-
-        
-        const updatedStore = await this.prisma.store.update({
-            where: { id: storeId },
-            data: {
-                images: {
-                    set: store.images.filter((img) => img !== imageUrl),
-                },
-            },
-        });
-
-        return {
-            message: 'Image deleted successfully',
-            store: updatedStore,
-        };
-    }
 }
