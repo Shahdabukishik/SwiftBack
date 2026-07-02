@@ -74,6 +74,9 @@ export class AuthService {
       message: 'User created successfully',
       userId: createdUser.id,
       firstName: createdUser.firstName,
+      lastName: createdUser.lastName,
+      phone: createdUser.phone,
+      dateOfBirth: createdUser.dateOfBirth,
     };
 
   }
