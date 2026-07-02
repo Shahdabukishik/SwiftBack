@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { BadRequestException , NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
 
 @Injectable()
@@ -43,26 +43,36 @@ export class StoreImagesService {
         return uploads;
     }
 
-    async deleteImage(imageId: string) {
-        const image = await this.prisma.storeImage.findUnique({
-            where: { id: imageId },
+    async deleteImages(imageIds: string[]) {
+        const images = await this.prisma.storeImage.findMany({
+            where: { id: { in: imageIds } },
         });
 
-        if (!image) throw new NotFoundException('Image not found');
+        if (images.length !== imageIds.length) {
+            throw new NotFoundException('One or more images not found');
+        }
 
         // 1. delete from Supabase
         const { error } = await this.supabase.client.storage
             .from('store-images')
-            .remove([image.path]);
+            .remove(images.map((img) => img.path));
 
         if (error) throw new BadRequestException(error.message);
 
-        
-        await this.prisma.storeImage.delete({
-            where: { id: imageId },
+
+        await this.prisma.storeImage.deleteMany({
+            where: {
+                id: {
+                    in: images.map(
+                        (image) => image.id,
+                    ),
+                },
+            },
         });
 
-        return { message: 'deleted' };
+        return {
+            message: `${images.length} image(s) deleted successfully`,
+        };
     }
 
 }

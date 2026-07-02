@@ -1,11 +1,12 @@
 import { Controller } from '@nestjs/common';
-import { Post, Param, UploadedFiles, UseInterceptors, Delete, Version } from '@nestjs/common';
+import { Post, Param, UploadedFiles, UseInterceptors, Delete, Version, Body } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { StoreImagesService } from './store-images.service';
-import { ApiConsumes, ApiBody , ApiBearerAuth } from '@nestjs/swagger';
+import { ApiConsumes, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
 import { BadRequestException } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UseGuards } from '@nestjs/common';
+import { DeleteStoreImagesDto } from './dto/delete-storeImages.dto';
 
 
 
@@ -31,7 +32,7 @@ export class StoreImagesController {
             },
         },
     })
-    @Post(':storeId/images')
+    @Post(':storeId')
     @UseInterceptors(FilesInterceptor('images', 10, {
         limits: {
             fileSize: 5 * 1024 * 1024, // 5 MB
@@ -66,8 +67,10 @@ export class StoreImagesController {
     @ApiBearerAuth()
     @UseGuards(JwtAuthGuard)
     @Version('1')
-    @Delete('images/:id')
-    deleteImage(@Param('id') id: string) {
-        return this.storeImagesService.deleteImage(id);
+    @Delete(':imagesId')
+    deleteImages(
+        @Body() dto: DeleteStoreImagesDto,
+    ) {
+        return this.storeImagesService.deleteImages(dto.imageIds);
     }
 }

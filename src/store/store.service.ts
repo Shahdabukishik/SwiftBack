@@ -26,12 +26,21 @@ export class StoreService {
     }
 
     async findAll() {
-        return this.prisma.store.findMany();
+        return this.prisma.store.findMany(
+            {
+                include: {
+                    images: true,
+                },
+            }
+        );
     }
 
     async findOne(id: string) {
         return this.prisma.store.findUnique({
             where: { id },
+            include: {
+                images: true,
+            },
         });
     }
 
@@ -57,5 +66,5 @@ export class StoreService {
     }
 
 
-  
+
 }
