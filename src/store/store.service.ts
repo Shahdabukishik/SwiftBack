@@ -5,6 +5,7 @@ import { UpdateStoreDto } from './dto/update-store.dto';
 import { NotFoundException } from '@nestjs/common';
 import { BadRequestException } from '@nestjs/common';
 import { SupabaseService } from '../supabase/supabase.service';
+import { StoreImagesService } from 'src/store-images/store-images.service';
 
 interface StoreImageUpload {
     originalname: string;
@@ -16,7 +17,8 @@ interface StoreImageUpload {
 export class StoreService {
     constructor(
         private prisma: PrismaService,
-        private supabase: SupabaseService
+        private supabase: SupabaseService,
+        private readonly storeImagesService: StoreImagesService,
     ) { }
 
     async create(dto: CreateStoreDto) {
@@ -45,9 +47,34 @@ export class StoreService {
     }
 
     async remove(id: string) {
-        return this.prisma.store.delete({
+        const store = await this.prisma.store.findUnique({
+            where: { id },
+            include: {
+                images: {
+                    select: {
+                        id: true,
+                    },
+                },
+            },
+        });
+
+        if (!store) {
+            throw new NotFoundException('Store not found');
+        }
+
+        if (store.images.length > 0) {
+            await this.storeImagesService.deleteImages(
+                store.images.map((image) => image.id),
+            );
+        }
+
+        await this.prisma.store.delete({
             where: { id },
         });
+
+        return {
+            message: 'Store deleted successfully',
+        };
     }
 
     async update(id: string, dto: UpdateStoreDto) {

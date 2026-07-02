@@ -10,6 +10,7 @@ import { SupabaseModule } from 'src/supabase/supabase.module';
     SupabaseModule,
   ],
   controllers: [StoreImagesController],
-  providers: [StoreImagesService]
+  providers: [StoreImagesService],
+  exports: [StoreImagesService],
 })
-export class StoreImagesModule {}
+export class StoreImagesModule { }
