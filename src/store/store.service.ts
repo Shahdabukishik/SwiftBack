@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateStoreDto } from './dto/create-store.dto';
 import { UpdateStoreDto } from './dto/update-store.dto';
 import { NotFoundException } from '@nestjs/common';
-import { BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { SupabaseService } from '../supabase/supabase.service';
 import { StoreImagesService } from 'src/store-images/store-images.service';
 
@@ -23,7 +23,12 @@ export class StoreService {
 
     async create(dto: CreateStoreDto) {
         return this.prisma.store.create({
-            data: dto,
+            data: {
+                name: dto.name,
+                address: dto.address,
+                phone: dto.phone,
+                workingHours: dto.workingHours as any,
+            },
         });
     }
 
@@ -88,7 +93,12 @@ export class StoreService {
 
         return this.prisma.store.update({
             where: { id },
-            data: dto,
+            data: {
+                name: dto.name,
+                address: dto.address,
+                phone: dto.phone,
+                workingHours: dto.workingHours as any,
+            }
         });
     }
 
