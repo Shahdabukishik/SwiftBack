@@ -88,7 +88,6 @@ export class AuthController {
         'Reset token does not match the requested user.',
       );
     }
-
     return this.authService.resetPassword(
       dto,
       req.user,

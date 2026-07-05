@@ -19,7 +19,7 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { LoginDto } from './dto/login.dto';
 
 import { RegisterDto } from './dto/register.dto';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 
 type ResetPasswordJwtPayload = {
@@ -353,3 +353,5 @@ export class AuthService {
   }
 
 }
+
+
