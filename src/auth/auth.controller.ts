@@ -105,7 +105,7 @@ export class AuthController {
     @Req() req,
     @Body() dto: ChangePasswordDto,
   ) {
-    console.log(req.user);
+    console.log("changePassword",req.user);
     if (req.user.userId !== userId) {
       throw new ForbiddenException(
         'You are not allowed to change another user password.',
@@ -121,11 +121,12 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Delete(':userId/delete-account')
   async deleteAccount(
-    @Param('userId') id: string,
+    @Param('userId') userId: string,
     @Req() req: any,
   ) {
-    const userId = id;
-    if (userId !== id) {
+
+    console.log("deleteAccount",req.user);
+    if (req.user.userId !== userId) {
       throw new ForbiddenException(
         'You are not allowed to delete this account',
       );
