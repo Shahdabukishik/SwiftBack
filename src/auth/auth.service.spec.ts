@@ -5,15 +5,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { JwtService } from '@nestjs/jwt';
 import { SmsService } from './services/sms.service';
 import { ConfigService } from '@nestjs/config';
-import { UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { BadRequestException } from '@nestjs/common';
-import { NotFoundException } from '@nestjs/common';
+import { sign } from 'crypto';
+
+
+
 
 
 jest.mock('bcrypt', () => ({
     hash: jest.fn(),
     compare: jest.fn(),
+
 }));
 
 
@@ -66,6 +69,7 @@ describe('AuthService - register', () => {
 
     afterEach(() => {
         jest.clearAllMocks();
+        jest.resetAllMocks();
     });
 
     it('should create user successfully', async () => {
@@ -156,6 +160,10 @@ describe('AuthService - login', () => {
         service = module.get<AuthService>(AuthService);
 
         jest.clearAllMocks();
+    });
+    afterEach(() => {
+        jest.clearAllMocks();
+        jest.resetAllMocks();
     });
 
     it('should throw UnauthorizedException when user is not found', async () => {
@@ -280,6 +288,10 @@ describe('AuthService - forgotPassword', () => {
         service['generateOtp'] = jest.fn().mockReturnValue('123456');
     });
 
+    afterEach(() => {
+        jest.clearAllMocks();
+        jest.resetAllMocks();
+    });
     it('should return success message and NOT send OTP when user does not exist', async () => {
         // Arrange
         prismaMock.user.findUnique.mockResolvedValue(null);
@@ -393,8 +405,11 @@ describe('AuthService - verifyOtp', () => {
 
         jest.clearAllMocks();
     });
+    afterEach(() => {
+        jest.clearAllMocks();
+        jest.resetAllMocks();
+    });
 
-    
     it('should return resetToken and clear OTP data when OTP is valid', async () => {
         // Arrange
         const dto = { phone: 'any-phone', otp: '123456' };
@@ -427,7 +442,7 @@ describe('AuthService - verifyOtp', () => {
         expect(prismaMock.user.update).toHaveBeenCalledTimes(1);
     });
 
-   
+
 
     it('should throw BadRequestException when user is not found', async () => {
         // Arrange
@@ -500,16 +515,16 @@ describe('AuthService - verifyOtp', () => {
 
 
 describe('AuthService - resetPassword', () => {
-  let service: AuthService;
+    let service: AuthService;
 
-  const prismaMock = {
-    user: {
-      findUnique: jest.fn(),
-      update: jest.fn(),
-    },
-  };
-  
-   const mockJwtService = {};
+    const prismaMock = {
+        user: {
+            findUnique: jest.fn(),
+            update: jest.fn(),
+        },
+    };
+
+    const mockJwtService = {};
 
     const mockSmsService = {
         send: jest.fn(),
@@ -520,95 +535,328 @@ describe('AuthService - resetPassword', () => {
     };
 
 
-  const bcryptMock = bcrypt as jest.Mocked<typeof bcrypt>;
+    const bcryptMock = bcrypt as jest.Mocked<typeof bcrypt>;
 
-  const validDto = {
-    newPassword: 'new-pass',
-    confirmPassword: 'new-pass',
-  };
-
-  const jwtPayload = {
-    sub: 'user-id',
-  };
-
-  beforeEach(async () => {
-    jest.clearAllMocks();
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        AuthService,
-        {
-          provide: PrismaService,
-          useValue: prismaMock,
-        },
-        {
-          provide: JwtService,
-          useValue: mockJwtService,
-        },
-        {
-          provide: SmsService,
-          useValue: mockSmsService,
-        },
-        {
-          provide: ConfigService,
-          useValue: mockConfigService,
-        },
-      ],
-    }).compile();
-
-    service = module.get<AuthService>(AuthService);
-  });
-
-
-  it('should reset password successfully', async () => {
-    // Arrange
-    prismaMock.user.findUnique.mockResolvedValue({ id: 'any-user' });
-    bcryptMock.hash.mockResolvedValue('hashed-password' as never);
-
-    prismaMock.user.update.mockResolvedValue({} as any);
-
-    // Act
-    const result = await service.resetPassword(validDto, jwtPayload as any);
-
-    // Assert
-    expect(prismaMock.user.findUnique).toHaveBeenCalledTimes(1);
-    expect(prismaMock.user.update).toHaveBeenCalledTimes(1);
-    expect(bcryptMock.hash).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({
-      message: 'Password updated successfully',
-    });
-  });
-
-
-  it('should throw NotFoundException if user does not exist', async () => {
-    // Arrange
-    prismaMock.user.findUnique.mockResolvedValue(null);
-
-    // Act + Assert
-    await expect(
-      service.resetPassword(validDto, jwtPayload as any),
-    ).rejects.toThrow(NotFoundException);
-
-    expect(prismaMock.user.update).toHaveBeenCalledTimes(0);
-    expect(bcryptMock.hash).toHaveBeenCalledTimes(0);
-  });
-
-  
-  it('should throw BadRequestException when passwords do not match', async () => {
-    // Arrange
-    const invalidDto = {
-      newPassword: 'pass1',
-      confirmPassword: 'pass2',
+    const validDto = {
+        newPassword: 'new-pass',
+        confirmPassword: 'new-pass',
     };
 
-    prismaMock.user.findUnique.mockResolvedValue({ id: 'any-user' });
+    const jwtPayload = {
+        sub: 'user-id',
+    };
 
-    // Act + Assert
-    await expect(
-      service.resetPassword(invalidDto, jwtPayload as any),
-    ).rejects.toThrow(BadRequestException);
+    beforeEach(async () => {
+        jest.clearAllMocks();
 
-    expect(prismaMock.user.update).toHaveBeenCalledTimes(0);
-    expect(bcryptMock.hash).toHaveBeenCalledTimes(0);
-  });
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                AuthService,
+                {
+                    provide: PrismaService,
+                    useValue: prismaMock,
+                },
+                {
+                    provide: JwtService,
+                    useValue: mockJwtService,
+                },
+                {
+                    provide: SmsService,
+                    useValue: mockSmsService,
+                },
+                {
+                    provide: ConfigService,
+                    useValue: mockConfigService,
+                },
+            ],
+        }).compile();
+
+        service = module.get<AuthService>(AuthService);
+    });
+
+    afterEach(() => {
+        jest.clearAllMocks();
+        jest.resetAllMocks();
+    });
+
+    it('should reset password successfully', async () => {
+        // Arrange
+        prismaMock.user.findUnique.mockResolvedValue({ id: 'any-user' });
+        bcryptMock.hash.mockResolvedValue('hashed-password' as never);
+
+        prismaMock.user.update.mockResolvedValue({} as any);
+
+        // Act
+        const result = await service.resetPassword(validDto, jwtPayload as any);
+
+        // Assert
+        expect(prismaMock.user.findUnique).toHaveBeenCalledTimes(1);
+        expect(prismaMock.user.update).toHaveBeenCalledTimes(1);
+        expect(bcryptMock.hash).toHaveBeenCalledTimes(1);
+        expect(result).toEqual({
+            message: 'Password updated successfully',
+        });
+    });
+
+
+    it('should throw NotFoundException if user does not exist', async () => {
+        // Arrange
+        prismaMock.user.findUnique.mockResolvedValue(null);
+
+        // Act + Assert
+        await expect(
+            service.resetPassword(validDto, jwtPayload as any),
+        ).rejects.toThrow(NotFoundException);
+
+        expect(prismaMock.user.update).toHaveBeenCalledTimes(0);
+        expect(bcryptMock.hash).toHaveBeenCalledTimes(0);
+    });
+
+
+    it('should throw BadRequestException when passwords do not match', async () => {
+        // Arrange
+        const invalidDto = {
+            newPassword: 'pass1',
+            confirmPassword: 'pass2',
+        };
+
+        prismaMock.user.findUnique.mockResolvedValue({ id: 'any-user' });
+
+        // Act + Assert
+        await expect(
+            service.resetPassword(invalidDto, jwtPayload as any),
+        ).rejects.toThrow(BadRequestException);
+
+        expect(prismaMock.user.update).toHaveBeenCalledTimes(0);
+        expect(bcryptMock.hash).toHaveBeenCalledTimes(0);
+    });
+});
+
+
+describe('AuthService - changePassword', () => {
+
+    let service: AuthService;
+    let prisma: {
+        user: {
+            findUnique: jest.Mock;
+            update: jest.Mock;
+        };
+    };
+
+
+    const mockPrisma = {
+        user: {
+            findUnique: jest.fn(),
+            create: jest.fn(),
+        },
+    };
+    const mockJwtService = {};
+
+    const mockSmsService = {
+        send: jest.fn(),
+    };
+
+    const mockConfigService = {
+        get: jest.fn(),
+    };
+
+
+    beforeEach(async () => {
+        prisma = {
+            user: {
+                findUnique: jest.fn(),
+                update: jest.fn(),
+            },
+
+        };
+
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                AuthService,
+                { provide: PrismaService, useValue: prisma },
+                { provide: JwtService, useValue: mockJwtService },
+                { provide: SmsService, useValue: mockSmsService },
+                { provide: ConfigService, useValue: mockConfigService },
+
+            ],
+
+        }).compile();
+
+        service = module.get<AuthService>(AuthService);
+    });
+
+    afterEach(() => {
+        jest.clearAllMocks();
+        jest.resetAllMocks();
+    });
+
+    it('should throw NotFoundException when user does not exist', async () => {
+        // Arrange
+        prisma.user.findUnique.mockResolvedValue(null);
+
+        // Act & Assert
+        await expect(
+            service.changePassword('1', {
+                currentPassword: 'a',
+                newPassword: 'b',
+                confirmPassword: 'b',
+            } as any),
+        ).rejects.toThrow('User not found');
+
+        expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequest when new password equals current password', async () => {
+        prisma.user.findUnique.mockResolvedValue({ id: '1', password: 'hashed' });
+
+        await expect(
+            service.changePassword('1', {
+                currentPassword: 'same',
+                newPassword: 'same',
+                confirmPassword: 'same',
+            } as any),
+        ).rejects.toThrow('New password must be different from current password');
+
+        expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequest when current password is invalid', async () => {
+        prisma.user.findUnique.mockResolvedValue({ id: '1', password: 'hashed' });
+        (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+        await expect(
+            service.changePassword('1', {
+                currentPassword: 'wrong',
+                newPassword: 'new',
+                confirmPassword: 'new',
+            } as any),
+        ).rejects.toThrow('Current password is incorrect');
+
+        expect(bcrypt.compare).toHaveBeenCalledTimes(1);
+        expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should throw BadRequest when passwords do not match', async () => {
+        prisma.user.findUnique.mockResolvedValue({ id: '1', password: 'hashed' });
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+        await expect(
+            service.changePassword('1', {
+                currentPassword: 'old',
+                newPassword: 'new1',
+                confirmPassword: 'new2',
+            } as any),
+        ).rejects.toThrow('Passwords do not match');
+
+        expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should change password successfully (happy path)', async () => {
+        prisma.user.findUnique.mockResolvedValue({ id: '1', password: 'hashed' });
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+        (bcrypt.hash as jest.Mock).mockResolvedValue('newHashedPassword');
+
+        prisma.user.update.mockResolvedValue({});
+
+        const result = await service.changePassword('1', {
+            currentPassword: 'old',
+            newPassword: 'new',
+            confirmPassword: 'new',
+        } as any);
+
+        expect(bcrypt.compare).toHaveBeenCalledTimes(1);
+        expect(bcrypt.hash).toHaveBeenCalledTimes(1);
+
+        expect(prisma.user.update).toHaveBeenCalledTimes(1);
+
+        expect(result).toEqual({
+            message: 'Password changed successfully',
+        });
+    });
+});
+
+
+describe('AuthService - deleteAccount', () => {
+    let service: AuthService;
+
+    const mockPrisma = {
+        user: {
+            findUnique: jest.fn(),
+            create: jest.fn(),
+            delete: jest.fn(),
+        },
+    };
+    beforeEach(async () => {
+        jest.clearAllMocks();
+
+        const module: TestingModule = await Test.createTestingModule({
+            providers: [
+                AuthService,
+                {
+                    provide: PrismaService,
+                    useValue: mockPrisma,
+                },
+               {
+  provide: JwtService,
+  useValue: { sign: jest.fn() },
+},
+{
+  provide: SmsService,
+  useValue: { sendOtp: jest.fn() },
+},
+{
+  provide: ConfigService,
+  useValue: { get: jest.fn() },
+},
+
+            ],
+        })
+            .overrideProvider(PrismaService)
+            .useValue(mockPrisma)
+            .compile();
+
+        service = module.get(AuthService);
+    });
+
+    it('should delete the user successfully', async () => {
+        // Arrange
+        const userId = 'user-id';
+
+        mockPrisma.user.findUnique.mockResolvedValue({});
+        mockPrisma.user.delete.mockResolvedValue({});
+
+        // Act
+        const result = await service.deleteAccount(userId);
+
+        // Assert
+        expect(mockPrisma.user.findUnique).toHaveBeenCalledTimes(1);
+        expect(mockPrisma.user.delete).toHaveBeenCalledTimes(1);
+
+        expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
+            where: { id: userId },
+        });
+
+        expect(mockPrisma.user.delete).toHaveBeenCalledWith({
+            where: { id: userId },
+        });
+
+        expect(result).toEqual({
+            message: 'Account deleted successfully',
+        });
+    });
+
+    it('should throw NotFoundException when user does not exist', async () => {
+        // Arrange
+        const userId = 'user-id';
+
+        mockPrisma.user.findUnique.mockResolvedValue(null);
+
+        // Act & Assert
+        await expect(service.deleteAccount(userId)).rejects.toThrow(
+            NotFoundException,
+        );
+
+        expect(mockPrisma.user.findUnique).toHaveBeenCalledTimes(1);
+        expect(mockPrisma.user.delete).not.toHaveBeenCalled();
+    });
 });

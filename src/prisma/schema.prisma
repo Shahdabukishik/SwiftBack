@@ -1,58 +1,73 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  
 }
 
 model User {
-  id          String   @id @default(uuid())
-  firstName   String
-  lastName    String
-  phone       String   @unique
-  dateOfBirth DateTime
-  password    String
-  otpCode      String?
+  id           String    @id @default(uuid())
+  firstName    String
+  lastName     String
+  phone        String    @unique
+  dateOfBirth  DateTime
+  password     String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
   otpExpiresAt DateTime?
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  otpCode      String?
 }
 
 model Store {
-  id        String   @id @default(uuid())
-  name      String
-  images    StoreImage[]
-  address   String
-  phone     String
-
-
+  id           String       @id @default(uuid())
+  name         String
+  address      String
+  phone        String
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
   workingHours Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  location     Json?
+  images       StoreImage[]
 
   @@map("stores")
 }
 
 model StoreImage {
   id        String   @id @default(uuid())
-
   storeId   String
-  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-
   url       String
-  path      String   
+  path      String
+  size      Int?
+  mimeType  String?
+  createdAt DateTime @default(now())
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model Advertisement {
+  id           String       @id @default(uuid())
+
+  name         String
+  description  String
+  images       AdvertisementImage[]
+  startDate    DateTime
+  endDate      DateTime
+
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+}
+
+model AdvertisementImage {
+  id        String   @id @default(uuid())
+  advertisementId   String
+  url       String
+  path      String
   size      Int?
   mimeType  String?
 
   createdAt DateTime @default(now())
+  
+  Advertisement     Advertisement    @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
 }
