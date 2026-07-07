@@ -68,6 +68,6 @@ model AdvertisementImage {
   mimeType  String?
 
   createdAt DateTime @default(now())
-  
-  Advertisement     Advertisement    @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
+
+  advertisement     Advertisement    @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
 }
