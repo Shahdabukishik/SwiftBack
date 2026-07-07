@@ -105,7 +105,7 @@ export class AuthController {
     @Req() req,
     @Body() dto: ChangePasswordDto,
   ) {
-    console.log("changePassword",req.user);
+    
     if (req.user.userId !== userId) {
       throw new ForbiddenException(
         'You are not allowed to change another user password.',
@@ -126,7 +126,6 @@ export class AuthController {
     @Req() req: any,
   ) {
 
-    console.log("deleteAccount",req.user);
     if (req.user.userId !== userId) {
       throw new ForbiddenException(
         'You are not allowed to delete this account',
