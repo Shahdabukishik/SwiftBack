@@ -117,6 +117,7 @@ export class AuthController {
     );
   }
 
+  @Version('1')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @Delete(':userId/delete-account')
