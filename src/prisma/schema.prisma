@@ -8,6 +8,9 @@ datasource db {
 
 model User {
   id           String    @id @default(uuid())
+
+  role         String @default("Customer")
+  userName     String?  
   firstName    String
   lastName     String
   phone        String    @unique
