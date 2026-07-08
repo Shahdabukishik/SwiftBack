@@ -30,6 +30,7 @@ export class JwtStrategy extends PassportStrategy(
     firstName: payload.firstName,
     lastName: payload.lastName,
     dateOfBirth: payload.dateOfBirth,
+    role: payload.role,
   };
   }
   
