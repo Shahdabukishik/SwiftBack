@@ -77,6 +77,7 @@ export class AuthService {
       lastName: createdUser.lastName,
       phone: createdUser.phone,
       dateOfBirth: createdUser.dateOfBirth,
+      role: createdUser.role,
     };
 
   }
@@ -117,6 +118,7 @@ export class AuthService {
       firstName: user.firstName,
       lastName: user.lastName,
       dateOfBirth: user.dateOfBirth,
+      role: user.role,
     };
 
 
