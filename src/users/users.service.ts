@@ -8,6 +8,7 @@ const userSelect = {
   lastName: true,
   phone: true,
   dateOfBirth: true,
+  role: true,
   createdAt: true,
   updatedAt: true,
 };

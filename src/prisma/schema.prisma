@@ -75,3 +75,50 @@ model AdvertisementImage {
 
   advertisement     Advertisement    @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
 }
+
+// Menu — uses Int auto-increment ids intentionally (frontend already built
+// against integer ids for these pages), unlike the rest of this schema.
+model MenuCategory {
+  id        Int        @id @default(autoincrement())
+  name      String
+  sortOrder Int        @default(0)
+  active    Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  createdBy String
+  updatedBy String
+  items     MenuItem[]
+
+  @@map("menu_categories")
+}
+
+model MenuItem {
+  id          Int             @id @default(autoincrement())
+  categoryId  Int
+  category    MenuCategory    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  name        String
+  description String?
+  price       Decimal         @db.Decimal(10, 2)
+  active      Boolean         @default(true)
+  sortOrder   Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  createdBy   String
+  updatedBy   String
+  images      MenuItemImage[]
+
+  @@map("menu_items")
+}
+
+model MenuItemImage {
+  id        Int      @id @default(autoincrement())
+  itemId    Int
+  item      MenuItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  url       String
+  path      String
+  size      Int?
+  mimeType  String?
+  createdAt DateTime @default(now())
+
+  @@map("menu_item_images")
+}

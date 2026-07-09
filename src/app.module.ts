@@ -8,6 +8,10 @@ import { StoreModule } from './store/store.module';
 import { StoreImagesModule } from './store-images/store-images.module';
 import { AdvertisementImagesModule } from './advertisement-images/advertisement-images.module';
 import { AdvertisementModule } from './advertisement/advertisement.module';
+import { MenuModule } from './menu/menu.module';
+import { MenuCategoriesModule } from './menu-categories/menu-categories.module';
+import { MenuItemsModule } from './menu-items/menu-items.module';
+import { MenuItemImagesModule } from './menu-item-images/menu-item-images.module';
 
 @Module({
   imports: [
@@ -22,7 +26,11 @@ import { AdvertisementModule } from './advertisement/advertisement.module';
     StoreImagesModule,
     HealthModule,
     AdvertisementImagesModule,
-    AdvertisementModule
+    AdvertisementModule,
+    MenuModule,
+    MenuCategoriesModule,
+    MenuItemsModule,
+    MenuItemImagesModule,
   ],
 })
 export class AppModule {}
