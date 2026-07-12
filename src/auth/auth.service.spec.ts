@@ -796,18 +796,18 @@ describe('AuthService - deleteAccount', () => {
                     provide: PrismaService,
                     useValue: mockPrisma,
                 },
-               {
-  provide: JwtService,
-  useValue: { sign: jest.fn() },
-},
-{
-  provide: SmsService,
-  useValue: { sendOtp: jest.fn() },
-},
-{
-  provide: ConfigService,
-  useValue: { get: jest.fn() },
-},
+                {
+                    provide: JwtService,
+                    useValue: { sign: jest.fn() },
+                },
+                {
+                    provide: SmsService,
+                    useValue: { sendOtp: jest.fn() },
+                },
+                {
+                    provide: ConfigService,
+                    useValue: { get: jest.fn() },
+                },
 
             ],
         })

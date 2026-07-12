@@ -8,133 +8,126 @@ import {
   UseGuards,
   Req,
   Delete,
+  ForbiddenException,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
-import { ForbiddenException } from '@nestjs/common';
-import { LoginDto } from './dto/login.dto';
-
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { ResetPasswordGuard } from './guards/reset-password.guard';
 import { AuthService } from './auth.service';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
+import { JwtPurposeGuard } from './guards/jwt-purpose.guard';
+import { JwtPurpose } from './decorator/jwt-purpose.decorator';
+
+import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth
-} from '@nestjs/swagger';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
-import { ForgotPasswordDto } from './dto/forgot-password.dto';
-
-
+import { EditAccountDto } from './dto/edit-account.dto';
+import { SendOtpDto } from './dto/send-otp.dto';
 
 @ApiTags('Users')
 @Controller('users')
 export class AuthController {
-  constructor(private authService: AuthService) { }
+  constructor(private readonly authService: AuthService) {}
 
   @Version('1')
-  @Post('register')
-  @ApiOperation({ summary: 'Register new user' })
-  @ApiResponse({ status: 201, description: 'User created' })
-  @ApiResponse({ status: 409, description: 'Phone exists' })
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  @Post('send-otp')
+  @ApiBearerAuth()
+  @UseGuards(OptionalJwtAuthGuard)
+  async sendOtp(@Body() dto: SendOtpDto, @Req() req: any) {
+    return this.authService.sendOtp(dto, req.user);
   }
-
-
-  @Version('1')
-  @Post('login')
-  login(
-    @Body() loginDto: LoginDto,
-  ) {
-    return this.authService.login(loginDto);
-  }
-
-
-  @Version('1')
-  @Post('forgot-password')
-  forgotPassword(
-    @Body()
-    dto: ForgotPasswordDto,
-  ) {
-    return this.authService.forgotPassword(dto);
-  }
-
 
   @Version('1')
   @Post('verify-otp')
-  verifyOtp(
-    @Body() dto: VerifyOtpDto,
-  ) {
-    return this.authService.verifyOtp(dto);
+  @ApiBearerAuth()
+  @UseGuards(OptionalJwtAuthGuard)
+  async verifyOtp(@Body() dto: VerifyOtpDto, @Req() req: any) {
+    return this.authService.verifyOtp(dto, req.user);
+  }
+
+  @Version('1')
+  @Post('register')
+  @ApiBearerAuth()
+  @UseGuards(JwtPurposeGuard)
+  @JwtPurpose('register')
+  register(@Body() dto: RegisterDto, @Req() req: any) {
+    return this.authService.register(dto, req.user);
+  }
+
+  @Version('1')
+  @Post('login')
+  login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
   }
 
   @Version('1')
   @Post(':userId/reset-password')
   @ApiBearerAuth()
-  @UseGuards(ResetPasswordGuard)
+  @UseGuards(JwtPurposeGuard)
+  @JwtPurpose('reset-password')
   resetPassword(
     @Param('userId') userId: string,
-    @Req() req,
-    @Body()
-    dto: ResetPasswordDto,
+    @Body() dto: ResetPasswordDto,
+    @Req() req: any,
   ) {
     if (req.user.sub !== userId) {
-      throw new ForbiddenException(
-        'Reset token does not match the requested user.',
-      );
+      throw new ForbiddenException('Reset token does not match the requested user.');
     }
-    return this.authService.resetPassword(
-      dto,
-      req.user,
-    );
+    return this.authService.resetPassword(dto, req.user);
   }
 
-
-
+  @Version('1')
+  @Patch(':userId/change-phone')
   @ApiBearerAuth()
+  @UseGuards(JwtPurposeGuard)
+  @JwtPurpose('change-phone')
+  changePhone(@Param('userId') userId: string, @Req() req: any) {
+    if (req.user.sub !== userId) {
+      throw new ForbiddenException('Token does not match the requested user.');
+    }
+    return this.authService.changePhone(userId, req.user);
+  }
+
   @Version('1')
   @Patch(':userId/change-password')
+  @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   changePassword(
     @Param('userId') userId: string,
-    @Req() req,
     @Body() dto: ChangePasswordDto,
+    @Req() req: any,
   ) {
-    
     if (req.user.userId !== userId) {
-      throw new ForbiddenException(
-        'You are not allowed to change another user password.',
-      );
+      throw new ForbiddenException('You are not allowed to change another user password.');
     }
-    return this.authService.changePassword(
-      req.user.userId,
-      dto,
-    );
+    return this.authService.changePassword(userId, dto);
   }
 
   @Version('1')
+  @Patch(':userId/edit-user-name')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Delete(':userId/delete-account')
-  async deleteAccount(
+  async editAccount(
     @Param('userId') userId: string,
+    @Body() dto: EditAccountDto,
     @Req() req: any,
   ) {
-
     if (req.user.userId !== userId) {
-      throw new ForbiddenException(
-        'You are not allowed to delete this account',
-      );
+      throw new ForbiddenException('You are not allowed to edit this account');
     }
-
-    return this.authService.deleteAccount(userId);
+    return this.authService.editAccount(userId, dto);
   }
 
+  @Version('1')
+  @Delete(':userId/delete-account')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  async deleteAccount(@Param('userId') userId: string, @Req() req: any) {
+    if (req.user.userId !== userId) {
+      throw new ForbiddenException('You are not allowed to delete this account');
+    }
+    return this.authService.deleteAccount(userId);
+  }
 }
-
-

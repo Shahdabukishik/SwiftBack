@@ -6,21 +6,53 @@ datasource db {
   provider = "postgresql"
 }
 
+enum OtpPurpose {
+  REGISTER
+  RESET_PASSWORD
+  CHANGE_PHONE
+}
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+  CASHIER
+}
+
+enum OtpStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+}
+
+model Otp {
+  id          String      @id @default(uuid())
+
+  phone       String
+  userId      String?
+  code        String
+  purpose     OtpPurpose
+  status      OtpStatus   @default(PENDING)
+
+  expiresAt   DateTime
+  createdAt   DateTime    @default(now())
+}
+
 model User {
   id           String    @id @default(uuid())
 
 
-  role         String @default("Customer")
+  role         UserRole @default(CUSTOMER)
   userName     String?  
   firstName    String
   lastName     String
   phone        String    @unique
   dateOfBirth  DateTime
   password     String
+
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
-  otpExpiresAt DateTime?
-  otpCode      String?
+  
+  
 }
 
 model Store {
