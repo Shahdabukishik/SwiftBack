@@ -9,7 +9,7 @@ import { Request } from 'express';
 
 type ResetPasswordJwtPayload = {
   sub: string;
-  purpose?: string;
+  purpose: string;
   iat?: number;
   exp?: number;
 };
@@ -29,9 +29,7 @@ export class ResetPasswordGuard implements CanActivate {
       .switchToHttp()
       .getRequest<ResetPasswordRequest>();
 
-    const resetToken = this.extractBearerToken(
-      request,
-    );
+    const resetToken = this.extractBearerToken(request);
 
     if (!resetToken) {
       throw new UnauthorizedException(
@@ -45,13 +43,10 @@ export class ResetPasswordGuard implements CanActivate {
           resetToken,
         );
 
-      if (typeof payload.sub !== 'string') {
-        throw new UnauthorizedException(
-          'Invalid reset token',
-        );
-      }
-
-      if (payload.purpose !== 'reset-password') {
+      if (
+        typeof payload.sub !== 'string' ||
+        payload.purpose !== 'reset-password'
+      ) {
         throw new UnauthorizedException(
           'Invalid reset token',
         );

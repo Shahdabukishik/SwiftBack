@@ -41,9 +41,9 @@ export class MenuCategoriesController {
   @Version('1')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Patch(':id')
+  @Patch(':categoryId')
   update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('categoryId', ParseIntPipe) id: number,
     @Body() dto: UpdateMenuCategoryDto,
     @Req() req,
   ) {
@@ -53,8 +53,8 @@ export class MenuCategoriesController {
   @Version('1')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
+  @Delete(':categoryId')
+  remove(@Param('categoryId', ParseIntPipe) id: number) {
     return this.menuCategoriesService.remove(id);
   }
 }

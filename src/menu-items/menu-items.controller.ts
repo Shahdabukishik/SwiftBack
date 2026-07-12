@@ -41,9 +41,9 @@ export class MenuItemsController {
   @Version('1')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Patch(':id')
+  @Patch(':itemId')
   update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('itemId', ParseIntPipe) id: number,
     @Body() dto: UpdateMenuItemDto,
     @Req() req,
   ) {
@@ -53,8 +53,8 @@ export class MenuItemsController {
   @Version('1')
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
-  @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
+  @Delete(':itemId')
+  remove(@Param('itemId', ParseIntPipe) id: number) {
     return this.menuItemsService.remove(id);
   }
 }

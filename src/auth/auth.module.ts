@@ -1,28 +1,38 @@
-// src/auth/auth.module.ts
-
 import { Module } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
-import { PrismaModule } from '../prisma/prisma.module';
 import { JwtModule } from '@nestjs/jwt';
-import { JwtStrategy } from './strategies/jwt.strategy';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { PassportModule } from '@nestjs/passport';
+import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
+import { JwtStrategy } from './strategies/jwt.strategy';
+import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from './services/sms.service';
-import { ResetPasswordGuard } from './guards/reset-password.guard';
-import { StringValue } from 'ms';
+import { JwtPurposeGuard } from './guards/jwt-purpose.guard';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
 
 @Module({
-  imports: [PrismaModule,
-
-
+  imports: [
+    PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET')!,
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'),
       }),
-    }),],
+      inject: [ConfigService],
+    }),
+    ConfigModule,
+  ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, SmsService, ResetPasswordGuard],
+  providers: [
+    AuthService,
+    PrismaService,
+    SmsService,
+    JwtStrategy,
+    JwtPurposeGuard,
+    JwtAuthGuard,
+    OptionalJwtAuthGuard,
+  ],
+  exports: [AuthService],
 })
-export class AuthModule { }
+export class AuthModule {}
