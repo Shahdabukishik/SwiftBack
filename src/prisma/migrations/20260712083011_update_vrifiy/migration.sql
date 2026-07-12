@@ -1,0 +1,9 @@
+-- AlterTable
+ALTER TABLE "Otp" ADD COLUMN     "attempts" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN     "blockedUntil" TIMESTAMP(3),
+ADD COLUMN     "rateLimitLevel" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "requestCount" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN     "userId" TEXT;
+
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "isVerified" BOOLEAN NOT NULL DEFAULT false;

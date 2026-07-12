@@ -10,6 +10,11 @@ export class RegisterDto {
   @IsString()
   lastName!: string;
 
+  @ApiProperty({
+    example: '0599999999',
+  })
+  @IsString()
+  phone!: string;
 
   @ApiProperty({
     example: '1990-01-01',
@@ -22,7 +27,7 @@ export class RegisterDto {
     minLength: 8,
     maxLength: 64,
   })
-   @IsString()
+  @IsString()
   @MinLength(8)
   @MaxLength(64)
   @Matches(
