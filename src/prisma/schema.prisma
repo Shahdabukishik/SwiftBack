@@ -28,10 +28,16 @@ model Otp {
   id          String      @id @default(uuid())
 
   phone       String
-  userId      String?
+  userId         String?
   code        String
   purpose     OtpPurpose
   status      OtpStatus   @default(PENDING)
+
+  attempts       Int        @default(0)
+  rateLimitLevel Int        @default(1)
+  blockedUntil   DateTime?
+  requestCount   Int        @default(1)
+  ipAddress      String?
 
   expiresAt   DateTime
   createdAt   DateTime    @default(now())
@@ -49,6 +55,7 @@ model User {
   dateOfBirth  DateTime
   password     String
 
+  isVerified  Boolean  @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   

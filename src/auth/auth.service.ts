@@ -5,6 +5,8 @@ import {
   Injectable,
   UnauthorizedException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
@@ -33,14 +35,16 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  async sendOtp(dto: SendOtpDto, reqUser: any = null) {
+  async sendOtp(dto: SendOtpDto, reqUser: any = null, ipAddress: string | null = null) {
+  
     const { phone, purpose } = dto;
     const user = await this.prisma.user.findUnique({ where: { phone } });
 
+    // 1. Validation
     switch (purpose) {
       case OtpPurpose.REGISTER:
-        if (user) {
-          throw new ConflictException('Phone number already exists');
+        if (user && user.isVerified) {
+          throw new ConflictException('Phone number already registered and verified');
         }
         break;
 
@@ -60,9 +64,91 @@ export class AuthService {
         break;
     }
 
+    // 2. Rate Limit Check (Dual Evaluation)
+    const latestPhoneOtp = await this.prisma.otp.findFirst({
+      where: { phone, purpose },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const latestIpOtp = ipAddress ? await this.prisma.otp.findFirst({
+      where: { ipAddress, purpose },
+      orderBy: { createdAt: 'desc' },
+    }) : null;
+
+    // Explicit block check
+    if (latestPhoneOtp?.blockedUntil && latestPhoneOtp.blockedUntil > new Date()) {
+      throw new HttpException('Rate limit exceeded', HttpStatus.TOO_MANY_REQUESTS);
+    }
+    if (latestIpOtp?.blockedUntil && latestIpOtp.blockedUntil > new Date()) {
+      throw new HttpException('Rate limit exceeded', HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    // Calculate next state for Phone
+    let phoneLevel = latestPhoneOtp?.rateLimitLevel || 1;
+    let phoneCount = (latestPhoneOtp?.requestCount || 0) + 1;
+    let phoneBlockedUntil: Date | null = null;
+    let phoneShouldBlock = false;
+
+    if (phoneLevel === 1 && phoneCount > 2) {
+      phoneShouldBlock = true; phoneLevel = 2; phoneBlockedUntil = new Date(Date.now() + 5 * 60 * 1000);
+    } else if (phoneLevel === 2 && phoneCount > 1) {
+      phoneShouldBlock = true; phoneLevel = 3; phoneBlockedUntil = new Date(Date.now() + 60 * 60 * 1000);
+    } else if (phoneLevel === 3 && phoneCount > 1) {
+      phoneShouldBlock = true; phoneBlockedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    }
+
+    // Calculate next state for IP
+    let ipLevel = latestIpOtp?.rateLimitLevel || 1;
+    let ipCount = (latestIpOtp?.requestCount || 0) + 1;
+    let ipBlockedUntil: Date | null = null;
+    let ipShouldBlock = false;
+
+    if (ipLevel === 1 && ipCount > 2) {
+      ipShouldBlock = true; ipLevel = 2; ipBlockedUntil = new Date(Date.now() + 5 * 60 * 1000);
+    } else if (ipLevel === 2 && ipCount > 1) {
+      ipShouldBlock = true; ipLevel = 3; ipBlockedUntil = new Date(Date.now() + 60 * 60 * 1000);
+    } else if (ipLevel === 3 && ipCount > 1) {
+      ipShouldBlock = true; ipBlockedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    }
+
+    // Handle Blocking Event
+    if (phoneShouldBlock || ipShouldBlock) {
+      // Overwrite the existing records with the blocked state so subsequent requests see it
+      if (phoneShouldBlock && latestPhoneOtp) {
+        await this.prisma.otp.update({
+          where: { id: latestPhoneOtp.id },
+          data: { rateLimitLevel: phoneLevel, blockedUntil: phoneBlockedUntil, requestCount: 0 },
+        });
+      }
+      
+      // Update IP record if it's separate from the phone record
+      if (ipShouldBlock && latestIpOtp && latestIpOtp.id !== latestPhoneOtp?.id) {
+        await this.prisma.otp.update({
+          where: { id: latestIpOtp.id },
+          data: { rateLimitLevel: ipLevel, blockedUntil: ipBlockedUntil, requestCount: 0 },
+        });
+      }
+
+      throw new HttpException('Rate limit exceeded', HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    // If neither blocked, merge their state for the new shared record
+    const nextRateLimitLevel = Math.max(phoneLevel, ipLevel);
+    let nextRequestCount = 1;
+
+    if (phoneLevel === ipLevel) {
+      nextRequestCount = Math.max(phoneCount, ipCount);
+    } else if (phoneLevel > ipLevel) {
+      nextRequestCount = phoneCount;
+    } else {
+      nextRequestCount = ipCount;
+    }
+
+    // 3. Generate OTP
     const otp = this.generateOtp();
     const hashedOtp = await bcrypt.hash(otp, 10);
 
+    // 4. Save OTP
     await this.prisma.otp.deleteMany({
       where: {
         phone,
@@ -73,14 +159,19 @@ export class AuthService {
     await this.prisma.otp.create({
       data: {
         phone,
+        ipAddress,
         code: hashedOtp,
         purpose,
         status: OtpStatus.PENDING,
         expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
+        rateLimitLevel: nextRateLimitLevel,
+        requestCount: nextRequestCount,
+        blockedUntil: null,
+        attempts: 0,
       },
     });
 
-    // SMS transmission placeholder
+    // 5. Send SMS
     // await this.smsService.sendOtp(phone, otp);
 
     return {
@@ -115,9 +206,47 @@ export class AuthService {
     const isOtpValid = await bcrypt.compare(dto.otp, otp.code);
 
     if (!isOtpValid) {
-      throw new BadRequestException('Invalid OTP');
+      const newAttempts = otp.attempts + 1;
+      
+      if (newAttempts >= 5) {
+        await this.prisma.otp.update({
+          where: { id: otp.id },
+          data: { attempts: newAttempts, status: OtpStatus.EXPIRED },
+        });
+        throw new BadRequestException('Maximum verification attempts reached. Please request a new OTP.');
+      } else {
+        await this.prisma.otp.update({
+          where: { id: otp.id },
+          data: { attempts: newAttempts },
+        });
+        throw new BadRequestException('Invalid OTP');
+      }
     }
 
+    // --- OTP is Validated Successfully below this line ---
+
+    if (dto.purpose === OtpPurpose.REGISTER) {
+      const user = await this.prisma.user.findUnique({
+        where: { phone: dto.phone },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found. Please register first.');
+      }
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { isVerified: true },
+      });
+
+      await this.prisma.otp.delete({
+        where: { id: otp.id }
+      });
+
+      return { message: 'Account verified successfully.' };
+    }
+
+    // Preserve existing flow for Reset/Change phone marking it as VERIFIED
     await this.prisma.otp.update({
       where: { id: otp.id },
       data: { status: OtpStatus.VERIFIED },
@@ -125,22 +254,12 @@ export class AuthService {
 
     const secret = this.configService.get<string>('JWT_SECRET')!;
 
-    if (dto.purpose === OtpPurpose.REGISTER) {
-      const registerToken = await this.jwtService.signAsync(
-        { phone: dto.phone, purpose: 'register' },
-        { secret, expiresIn: '15m' },
-      );
-      return { registerToken };
-    }
-
     if (dto.purpose === OtpPurpose.RESET_PASSWORD) {
       const user = await this.prisma.user.findUnique({
         where: { phone: dto.phone },
       });
 
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
+      if (!user) throw new NotFoundException('User not found');
 
       const resetToken = await this.jwtService.signAsync(
         { sub: user.id, purpose: 'reset-password' },
@@ -162,13 +281,8 @@ export class AuthService {
     }
   }
 
-  async register(dto: RegisterDto, payload: JwtPurposePayload) {
-    if (!payload.phone) {
-      throw new ForbiddenException('Verified phone number is missing from token');
-    }
-
-    const phone = payload.phone;
-    const user = await this.prisma.user.findUnique({ where: { phone } });
+  async register(dto: RegisterDto) {
+    const user = await this.prisma.user.findUnique({ where: { phone: dto.phone } });
 
     if (user) {
       throw new ConflictException('Phone already exists');
@@ -176,28 +290,19 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    const createdUser = await this.prisma.user.create({
+    await this.prisma.user.create({
       data: {
         firstName: dto.firstName,
         lastName: dto.lastName,
-        phone, // Sourced from JWT token payload
+        phone: dto.phone, 
         dateOfBirth: new Date(dto.dateOfBirth),
         password: hashedPassword,
+        isVerified: false,
       },
     });
 
-    await this.prisma.otp.deleteMany({
-      where: { phone, purpose: OtpPurpose.REGISTER, status: OtpStatus.VERIFIED },
-    });
-
     return {
-      message: 'User created successfully',
-      userId: createdUser.id,
-      firstName: createdUser.firstName,
-      lastName: createdUser.lastName,
-      phone: createdUser.phone,
-      dateOfBirth: createdUser.dateOfBirth,
-      role: createdUser.role,
+      message: 'User registered successfully. Please verify your phone number.',
     };
   }
 
@@ -216,6 +321,10 @@ export class AuthService {
 
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid phone or password');
+    }
+
+    if (!user.isVerified) {
+      throw new UnauthorizedException('Account is not verified.');
     }
 
     const payload = {
@@ -376,6 +485,6 @@ export class AuthService {
   }
 
   private generateOtp(): string {
-    return '0000'; // Standardize logic during tests
+    return '0000';
   }
 }

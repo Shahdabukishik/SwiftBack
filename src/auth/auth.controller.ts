@@ -36,7 +36,29 @@ export class AuthController {
   @ApiBearerAuth()
   @UseGuards(OptionalJwtAuthGuard)
   async sendOtp(@Body() dto: SendOtpDto, @Req() req: any) {
-    return this.authService.sendOtp(dto, req.user);
+    let ipAddress: string | null = null;
+    
+    // Extract IP from x-forwarded-for header or fallback to request IP
+    const xForwardedFor = req.headers['x-forwarded-for'];
+    if (xForwardedFor) {
+      if (Array.isArray(xForwardedFor)) {
+        ipAddress = xForwardedFor[0];
+      } else {
+        ipAddress = xForwardedFor.split(',')[0].trim();
+      }
+    }
+    
+    if (!ipAddress) {
+      ipAddress = req.ip || null;
+    }
+
+    return this.authService.sendOtp(dto, req.user, ipAddress);
+  }
+
+  @Version('1')
+  @Post('register')
+  register(@Body() dto: RegisterDto) {
+    return this.authService.register(dto);
   }
 
   @Version('1')
@@ -45,15 +67,6 @@ export class AuthController {
   @UseGuards(OptionalJwtAuthGuard)
   async verifyOtp(@Body() dto: VerifyOtpDto, @Req() req: any) {
     return this.authService.verifyOtp(dto, req.user);
-  }
-
-  @Version('1')
-  @Post('register')
-  @ApiBearerAuth()
-  @UseGuards(JwtPurposeGuard)
-  @JwtPurpose('register')
-  register(@Body() dto: RegisterDto, @Req() req: any) {
-    return this.authService.register(dto, req.user);
   }
 
   @Version('1')
