@@ -28,7 +28,8 @@ model Otp {
   id          String      @id @default(uuid())
 
   phone       String
-  userId      String?
+   userId      String?
+  user         User? @relation(fields: [userId], references: [id], onDelete: Cascade)
   code        String
   purpose     OtpPurpose
   status      OtpStatus   @default(PENDING)
@@ -41,6 +42,8 @@ model Otp {
 
   expiresAt   DateTime
   createdAt   DateTime    @default(now())
+
+
 }
 
 model User {
@@ -59,7 +62,8 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   
-  
+  pointsTransactions PointsTransaction[]
+  Otps Otp[]
 }
 
 model Store {
@@ -145,7 +149,8 @@ model MenuItem {
   createdBy   String
   updatedBy   String
   images      MenuItemImage[]
-
+  
+  rewards     PointsReward[]
   @@map("menu_items")
 }
 
@@ -160,4 +165,82 @@ model MenuItemImage {
   createdAt DateTime @default(now())
 
   @@map("menu_item_images")
+}
+
+model PointsLevel {
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String            @db.VarChar(50) 
+  minPeriodPoints  Decimal           @map("min_period_points") @db.Decimal(10, 2) 
+  earnRate         Decimal           @map("earn_rate") @db.Decimal(10, 4) 
+  sortOrder        Int               @map("sort_order") 
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  createdBy        String            @map("created_by") @db.VarChar(100) // JWT userId
+  updatedBy        String            @map("updated_by") @db.VarChar(100) // JWT userId
+  
+  // Relations
+  userStates       PointsUserState[]
+
+  @@map("points_levels")
+}
+
+model PointsSetting {
+  id                   Int      @id @default(1)
+  evaluationPeriodDays Int      @map("evaluation_period_days")
+  signupBonusPoints    Decimal  @map("signup_bonus_points") @db.Decimal(10, 2)
+  birthdayBonusPoints  Decimal  @map("birthday_bonus_points") @db.Decimal(10, 2)
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  updatedBy            String   @map("updated_by") @db.VarChar(100)
+
+  @@map("points_settings")
+}
+
+model PointsReward {
+  id             String   @id @default(uuid()) @db.Uuid
+  menuItemId     Int      @map("menu_item_id")
+  pointsRequired Decimal  @map("points_required") @db.Decimal(10, 2) // Points required
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  menuItem       MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+
+  @@map("points_rewards")
+}
+
+enum TransactionType {
+  signup_bonus
+  purchase_earn
+  spin_reward
+  spin_multiplier
+  birthday_bonus
+  redeem
+}
+
+model PointsTransaction {
+  id           String          @id @default(uuid()) @db.Uuid
+  userId       String          @map("user_id") 
+  type         TransactionType
+  points       Decimal         @db.Decimal(10, 2)
+  balanceAfter Decimal         @map("balance_after") @db.Decimal(10, 2)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  createdBy    String          @map("created_by") @db.VarChar(100)
+
+ user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("points_transactions")
+}
+
+model PointsUserState {
+  userId             String       @id @map("user_id") @db.Uuid
+  currentBalance     Decimal      @map("current_balance") @db.Decimal(10, 2)
+  currentLevelId     String?      @map("current_level_id") @db.Uuid
+  periodPointsEarned Decimal      @map("period_points_earned") @db.Decimal(10, 2)
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  currentLevel       PointsLevel? @relation(fields: [currentLevelId], references: [id], onDelete: SetNull)
+
+  @@map("points_user_state")
 }

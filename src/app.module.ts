@@ -12,6 +12,7 @@ import { MenuModule } from './menu/menu.module';
 import { MenuCategoriesModule } from './menu-categories/menu-categories.module';
 import { MenuItemsModule } from './menu-items/menu-items.module';
 import { MenuItemImagesModule } from './menu-item-images/menu-item-images.module';
+import { PointsLevelModule } from './points-level/points-level.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { MenuItemImagesModule } from './menu-item-images/menu-item-images.module
     MenuCategoriesModule,
     MenuItemsModule,
     MenuItemImagesModule,
+    PointsLevelModule,
   ],
 })
 export class AppModule {}
