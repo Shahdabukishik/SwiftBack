@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
 import { Query } from '@nestjs/common';
 import { UsersQueryDto } from './dto/users-query.dto';
+import { SearchUsersDto } from './dto/search-users.dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -39,6 +40,37 @@ export class UsersController {
     @Query() query: UsersQueryDto,
   ) {
     return this.usersService.findAll(query);
+  }
+
+
+  @Version('1')
+  @Get('search')
+  @ApiOperation({ summary: 'Search users by first name, last name, or phone' })
+  @ApiResponse({ status: 200, description: 'Users returned successfully' })
+  @ApiResponse({ status: 400, description: 'Missing or invalid query' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiQuery({
+    name: 'query',
+    required: true,
+    example: 'john',
+    description: 'Search text matched against first name, last name, and phone number',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    example: 1,
+    description: 'Page number',
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    example: 10,
+    description: 'Items per page',
+  })
+  async search(
+    @Query() query: SearchUsersDto,
+  ) {
+    return this.usersService.search(query);
   }
 
 
