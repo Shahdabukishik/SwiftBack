@@ -12,11 +12,12 @@ import {
   Version,
 } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiBody, ApiConsumes } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes , ApiTags} from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { MenuItemImagesService } from './menu-item-images.service';
 import { DeleteMenuItemImagesDto } from './dto/delete-menu-item-images.dto';
 
+@ApiTags('Menu Item Images')
 @Controller('menu-item-images')
 export class MenuItemImagesController {
   constructor(

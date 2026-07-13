@@ -17,7 +17,7 @@ import { MenuCategoriesService } from './menu-categories.service';
 import { CreateMenuCategoryDto } from './dto/create-menu-category.dto';
 import { UpdateMenuCategoryDto } from './dto/update-menu-category.dto';
 
-@ApiTags('Menu Categories')
+@ApiTags('Menu')
 @Controller('menu/categories')
 export class MenuCategoriesController {
   constructor(
