@@ -13,6 +13,7 @@ import { MenuCategoriesModule } from './menu-categories/menu-categories.module';
 import { MenuItemsModule } from './menu-items/menu-items.module';
 import { MenuItemImagesModule } from './menu-item-images/menu-item-images.module';
 import { PointsLevelModule } from './points-level/points-level.module';
+import { SpinWheelModule } from './spin-wheel/spin-wheel.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { PointsLevelModule } from './points-level/points-level.module';
     MenuItemsModule,
     MenuItemImagesModule,
     PointsLevelModule,
+    SpinWheelModule,
   ],
 })
 export class AppModule {}
