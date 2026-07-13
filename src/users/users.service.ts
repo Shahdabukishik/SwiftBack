@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { UsersQueryDto } from './dto/users-query.dto';
 
 const userSelect = {
   id: true,
@@ -17,14 +18,17 @@ const userSelect = {
 export class UsersService {
   constructor(private readonly prisma: PrismaService) { }
 
-  async findAll(paginationDto: PaginationDto) {
+  async findAll(query: UsersQueryDto) {
 
-    const { page, limit } = paginationDto;
+    const { page, limit, role } = query;
 
     const skip = (page - 1) * limit;
 
+    const where: Prisma.UserWhereInput = role?.length ? { role: { in: role } } : {};
+
     const [users, totalItems] = await Promise.all([
       this.prisma.user.findMany({
+        where,
         skip,
         take: limit,
         orderBy: {
@@ -32,7 +36,7 @@ export class UsersService {
         },
         select: userSelect,
       }),
-      this.prisma.user.count(),
+      this.prisma.user.count({ where }),
     ]);
 
 

@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiQuery } from '@ne
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
 import { Query } from '@nestjs/common';
-import { PaginationDto } from 'src/common/dto/pagination.dto';
+import { UsersQueryDto } from './dto/users-query.dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -29,10 +29,16 @@ export class UsersController {
     example: 10,
     description: 'Items per page',
   })
+  @ApiQuery({
+    name: 'role',
+    required: false,
+    example: 'ADMIN,CASHIER',
+    description: 'Comma-separated list of roles to filter by (case-insensitive)',
+  })
   async findAll(
-    @Query() paginationDto: PaginationDto,
+    @Query() query: UsersQueryDto,
   ) {
-    return this.usersService.findAll(paginationDto);
+    return this.usersService.findAll(query);
   }
 
 
