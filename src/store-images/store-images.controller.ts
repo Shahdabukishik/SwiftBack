@@ -2,14 +2,14 @@ import { Controller } from '@nestjs/common';
 import { Post, Param, UploadedFiles, UseInterceptors, Delete, Version, Body } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { StoreImagesService } from './store-images.service';
-import { ApiConsumes, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiConsumes, ApiBody, ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { BadRequestException } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UseGuards } from '@nestjs/common';
 import { DeleteStoreImagesDto } from './dto/delete-storeImages.dto';
 
 
-
+@ApiTags('Store Images')
 @Controller('store-images')
 export class StoreImagesController {
     constructor(private readonly storeImagesService: StoreImagesService) { }

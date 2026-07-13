@@ -2,14 +2,14 @@ import { Controller } from '@nestjs/common';
 import { Post, Param, UploadedFiles, UseInterceptors, Delete, Version, Body } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import {AdvertisementImagesService } from './advertisement-images.service';
-import { ApiConsumes, ApiBody, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiConsumes, ApiBody, ApiBearerAuth , ApiTags } from '@nestjs/swagger';
 import { BadRequestException } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UseGuards } from '@nestjs/common';
 import { DeleteAdvertisementImagesDto } from './dto/delete-advertisement-images.dto';
 
 
-
+@ApiTags('Advertisement Images')
 @Controller('advertisement-images')
 export class AdvertisementImagesController {
     constructor(private readonly advertisementImagesService: AdvertisementImagesService) { }
