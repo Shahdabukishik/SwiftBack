@@ -11,5 +11,5 @@ export class SearchUsersDto extends PaginationDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   @IsString()
   @IsNotEmpty()
-  query: string;
+  query!: string;
 }

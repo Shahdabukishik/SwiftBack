@@ -8,6 +8,8 @@ import { ConfigService } from '@nestjs/config';
 import { UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { sign } from 'crypto';
+import { OtpPurpose, OtpStatus } from '@prisma/client';
+import { PointsEngineService } from '../points-engine/points-engine.service';
 
 
 
@@ -40,6 +42,10 @@ describe('AuthService - register', () => {
         get: jest.fn(),
     };
 
+    const mockPointsEngineService = {
+        awardSignupBonus: jest.fn(),
+    };
+
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -60,6 +66,10 @@ describe('AuthService - register', () => {
                 {
                     provide: ConfigService,
                     useValue: mockConfigService,
+                },
+                {
+                    provide: PointsEngineService,
+                    useValue: mockPointsEngineService,
                 },
             ],
         }).compile();
@@ -91,7 +101,7 @@ describe('AuthService - register', () => {
             dateOfBirth: '2000-01-01',
         });
 
-        expect(result.message).toBe('User created successfully');
+        expect(result.message).toBe('User registered successfully. Please verify your phone number.');
         expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({
             where: { phone: '123' },
         });
@@ -146,6 +156,10 @@ describe('AuthService - login', () => {
         get: jest.fn(),
     };
 
+    const pointsEngineMock = {
+        awardSignupBonus: jest.fn(),
+    };
+
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -154,6 +168,7 @@ describe('AuthService - login', () => {
                 { provide: JwtService, useValue: jwtMock },
                 { provide: ConfigService, useValue: configMock },
                 { provide: SmsService, useValue: mockSmsService },
+                { provide: PointsEngineService, useValue: pointsEngineMock },
             ],
         }).compile();
 
@@ -206,6 +221,7 @@ describe('AuthService - login', () => {
             firstName: 'A',
             lastName: 'B',
             dateOfBirth: '2000-01-01',
+            isVerified: true,
         });
 
         (bcrypt.hash as jest.Mock).mockResolvedValue('hashedPassword');
@@ -246,12 +262,17 @@ describe('AuthService - login', () => {
 
 
 
-describe('AuthService - forgotPassword', () => {
+describe('AuthService - sendOtp', () => {
     let service: AuthService;
 
     const prismaMock = {
         user: {
             findUnique: jest.fn(),
+        },
+        otp: {
+            findFirst: jest.fn(),
+            deleteMany: jest.fn(),
+            create: jest.fn(),
             update: jest.fn(),
         },
     };
@@ -269,6 +290,10 @@ describe('AuthService - forgotPassword', () => {
         get: jest.fn(),
     };
 
+    const pointsEngineMock = {
+        awardSignupBonus: jest.fn(),
+    };
+
     beforeEach(async () => {
         jest.clearAllMocks();
 
@@ -279,12 +304,12 @@ describe('AuthService - forgotPassword', () => {
                 { provide: SmsService, useValue: smsMock },
                 { provide: JwtService, useValue: jwtMock },
                 { provide: ConfigService, useValue: configMock },
+                { provide: PointsEngineService, useValue: pointsEngineMock },
             ],
         }).compile();
 
         service = module.get<AuthService>(AuthService);
 
-        // mock internal method
         service['generateOtp'] = jest.fn().mockReturnValue('123456');
     });
 
@@ -292,73 +317,34 @@ describe('AuthService - forgotPassword', () => {
         jest.clearAllMocks();
         jest.resetAllMocks();
     });
-    it('should return success message and NOT send OTP when user does not exist', async () => {
-        // Arrange
-        prismaMock.user.findUnique.mockResolvedValue(null);
 
-        // Act
-        const result = await service.forgotPassword({ phone: 'any-phone' });
-
-        // Assert
-        expect(prismaMock.user.findUnique).toHaveBeenCalledTimes(1);
-        expect(prismaMock.user.update).not.toHaveBeenCalled();
-        expect(smsMock.sendOtp).not.toHaveBeenCalled();
-        expect(bcrypt.hash).not.toHaveBeenCalled();
-        expect(result).toEqual({
-            message: 'If the account exists, an OTP has been sent.',
-        });
-    });
-
-    it('should generate OTP, hash it, update user and send SMS when user exists', async () => {
-        // Arrange
-        const mockUser = { id: 'user-id', phone: '123456789' };
-
-        prismaMock.user.findUnique.mockResolvedValue(mockUser);
-        prismaMock.user.update.mockResolvedValue({});
-
+    it('should return success message and create OTP when register flow is valid', async () => {
+        prismaMock.user.findUnique.mockResolvedValue({ id: 'user-id', phone: '123456789', isVerified: false });
+        prismaMock.otp.findFirst.mockResolvedValue(null);
+        prismaMock.otp.deleteMany.mockResolvedValue({ count: 0 });
+        prismaMock.otp.create.mockResolvedValue({});
         (bcrypt.hash as jest.Mock).mockResolvedValue('hashed-otp');
 
-        // Act
-        const result = await service.forgotPassword({ phone: mockUser.phone });
+        const result = await service.sendOtp({ phone: '123456789', purpose: OtpPurpose.REGISTER } as any);
 
-        // Assert - flow verification only
-        expect(prismaMock.user.findUnique).toHaveBeenCalledTimes(1);
-
-        expect(service['generateOtp']).toHaveBeenCalledTimes(1);
-
-        expect(bcrypt.hash).toHaveBeenCalledTimes(1);
-
-        expect(prismaMock.user.update).toHaveBeenCalledTimes(1);
-        expect(prismaMock.user.update).toHaveBeenCalledWith(
-            expect.objectContaining({
-                where: { id: mockUser.id },
-                data: expect.objectContaining({
-                    otpCode: 'hashed-otp',
-                }),
-            }),
-        );
-
-        expect(smsMock.sendOtp).toHaveBeenCalledTimes(1);
-
-        expect(result).toEqual({
-            message: 'If the account exists, an OTP has been sent.',
-        });
+        expect(result).toEqual({ message: 'OTP sent successfully' });
+        expect(prismaMock.otp.create).toHaveBeenCalledTimes(1);
     });
 
-    it('should not send SMS if hashing fails (throws error)', async () => {
-        // Arrange
-        const mockUser = { id: 'user-id', phone: '123456789' };
+    it('should throw ConflictException when a verified user already exists for register', async () => {
+        prismaMock.user.findUnique.mockResolvedValue({ id: 'user-id', phone: '123456789', isVerified: true });
 
-        prismaMock.user.findUnique.mockResolvedValue(mockUser);
-        (bcrypt.hash as jest.Mock).mockRejectedValue(new Error('hash failed'));
+        await expect(service.sendOtp({ phone: '123456789', purpose: OtpPurpose.REGISTER } as any)).rejects.toThrow(ConflictException);
 
-        // Act & Assert
-        await expect(
-            service.forgotPassword({ phone: mockUser.phone }),
-        ).rejects.toThrow('hash failed');
+        expect(prismaMock.otp.create).not.toHaveBeenCalled();
+    });
 
-        expect(prismaMock.user.update).not.toHaveBeenCalled();
-        expect(smsMock.sendOtp).not.toHaveBeenCalled();
+    it('should throw NotFoundException when reset password user does not exist', async () => {
+        prismaMock.user.findUnique.mockResolvedValue(null);
+
+        await expect(service.sendOtp({ phone: 'any-phone', purpose: OtpPurpose.RESET_PASSWORD } as any)).rejects.toThrow(NotFoundException);
+
+        expect(prismaMock.otp.create).not.toHaveBeenCalled();
     });
 });
 
@@ -376,6 +362,11 @@ describe('AuthService - verifyOtp', () => {
             findUnique: jest.fn(),
             update: jest.fn(),
         },
+        otp: {
+            findFirst: jest.fn(),
+            update: jest.fn(),
+            delete: jest.fn(),
+        },
     };
 
     const jwtMock = {
@@ -390,6 +381,10 @@ describe('AuthService - verifyOtp', () => {
         send: jest.fn(),
     };
 
+    const pointsEngineMock = {
+        awardSignupBonus: jest.fn(),
+    };
+
     beforeEach(async () => {
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -398,6 +393,7 @@ describe('AuthService - verifyOtp', () => {
                 { provide: JwtService, useValue: jwtMock },
                 { provide: ConfigService, useValue: configMock },
                 { provide: SmsService, useValue: mockSmsService },
+                { provide: PointsEngineService, useValue: pointsEngineMock },
             ],
         }).compile();
 
@@ -410,104 +406,94 @@ describe('AuthService - verifyOtp', () => {
         jest.resetAllMocks();
     });
 
-    it('should return resetToken and clear OTP data when OTP is valid', async () => {
-        // Arrange
-        const dto = { phone: 'any-phone', otp: '123456' };
+    it('should return resetToken and mark OTP as verified when OTP is valid', async () => {
+        const dto = { phone: 'any-phone', otp: '123456', purpose: OtpPurpose.RESET_PASSWORD };
 
-        prismaMock.user.findUnique.mockResolvedValue({
-            id: 'user-id',
-            otpCode: 'hashed-otp',
-            otpExpiresAt: new Date(Date.now() + 10000),
+        prismaMock.otp.findFirst.mockResolvedValue({
+            id: 'otp-id',
+            phone: 'any-phone',
+            purpose: OtpPurpose.RESET_PASSWORD,
+            status: OtpStatus.PENDING,
+            code: 'hashed-otp',
+            expiresAt: new Date(Date.now() + 10000),
+            attempts: 0,
         });
 
         (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-
+        prismaMock.user.findUnique.mockResolvedValue({ id: 'user-id' });
         configMock.get.mockReturnValue('secret-key');
-
         jwtMock.signAsync.mockResolvedValue('reset-token');
+        prismaMock.otp.update.mockResolvedValue({});
 
-        prismaMock.user.update.mockResolvedValue({});
-
-        // Act
         const result = await service.verifyOtp(dto as any);
 
-        // Assert
-        expect(result).toEqual({
-            resetToken: 'reset-token',
+        expect(result).toEqual({ resetToken: 'reset-token' });
+        expect(prismaMock.otp.update).toHaveBeenCalledWith({
+            where: { id: 'otp-id' },
+            data: { status: OtpStatus.VERIFIED },
         });
-
-        expect(prismaMock.user.findUnique).toHaveBeenCalledTimes(1);
-        expect(bcrypt.compare).toHaveBeenCalledTimes(1);
-        expect(jwtMock.signAsync).toHaveBeenCalledTimes(1);
-        expect(prismaMock.user.update).toHaveBeenCalledTimes(1);
     });
 
 
 
-    it('should throw BadRequestException when user is not found', async () => {
-        // Arrange
+    it('should throw NotFoundException when user is not found for reset password', async () => {
+        prismaMock.otp.findFirst.mockResolvedValue({
+            id: 'otp-id',
+            phone: 'any-phone',
+            purpose: OtpPurpose.RESET_PASSWORD,
+            status: OtpStatus.PENDING,
+            code: 'hashed-otp',
+            expiresAt: new Date(Date.now() + 10000),
+            attempts: 0,
+        });
+
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
         prismaMock.user.findUnique.mockResolvedValue(null);
 
-        // Act & Assert
-        await expect(service.verifyOtp({} as any)).rejects.toThrow(
-            BadRequestException,
-        );
-
-        expect(prismaMock.user.update).not.toHaveBeenCalled();
-        expect(jwtMock.signAsync).not.toHaveBeenCalled();
+        await expect(service.verifyOtp({ phone: 'any-phone', otp: '123456', purpose: OtpPurpose.RESET_PASSWORD } as any)).rejects.toThrow(NotFoundException);
     });
 
     it('should throw BadRequestException when OTP data is missing', async () => {
-        // Arrange
-        prismaMock.user.findUnique.mockResolvedValue({
-            id: 'user-id',
-            otpCode: null,
-            otpExpiresAt: null,
-        });
+        prismaMock.otp.findFirst.mockResolvedValue(null);
 
-        // Act & Assert
-        await expect(
-            service.verifyOtp({} as any),
-        ).rejects.toThrow(BadRequestException);
-
+        await expect(service.verifyOtp({} as any)).rejects.toThrow(BadRequestException);
         expect(bcrypt.compare).not.toHaveBeenCalled();
-        expect(prismaMock.user.update).not.toHaveBeenCalled();
     });
 
     it('should throw BadRequestException when OTP is expired', async () => {
-        // Arrange
-        prismaMock.user.findUnique.mockResolvedValue({
-            id: 'user-id',
-            otpCode: 'hashed-otp',
-            otpExpiresAt: new Date(Date.now() - 10000),
+        prismaMock.otp.findFirst.mockResolvedValue({
+            id: 'otp-id',
+            phone: 'any-phone',
+            purpose: OtpPurpose.RESET_PASSWORD,
+            status: OtpStatus.PENDING,
+            code: 'hashed-otp',
+            expiresAt: new Date(Date.now() - 10000),
+            attempts: 0,
         });
 
-        // Act & Assert
-        await expect(
-            service.verifyOtp({} as any),
-        ).rejects.toThrow('OTP expired');
+        prismaMock.otp.update.mockResolvedValue({});
 
+        await expect(service.verifyOtp({ phone: 'any-phone', otp: '123456', purpose: OtpPurpose.RESET_PASSWORD } as any)).rejects.toThrow('OTP expired');
         expect(bcrypt.compare).not.toHaveBeenCalled();
         expect(jwtMock.signAsync).not.toHaveBeenCalled();
     });
 
     it('should throw BadRequestException when OTP is invalid', async () => {
-        // Arrange
-        prismaMock.user.findUnique.mockResolvedValue({
-            id: 'user-id',
-            otpCode: 'hashed-otp',
-            otpExpiresAt: new Date(Date.now() + 10000),
+        prismaMock.otp.findFirst.mockResolvedValue({
+            id: 'otp-id',
+            phone: 'any-phone',
+            purpose: OtpPurpose.RESET_PASSWORD,
+            status: OtpStatus.PENDING,
+            code: 'hashed-otp',
+            expiresAt: new Date(Date.now() + 10000),
+            attempts: 0,
         });
 
         (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+        prismaMock.otp.update.mockResolvedValue({});
 
-        // Act & Assert
-        await expect(
-            service.verifyOtp({} as any),
-        ).rejects.toThrow('Invalid OTP');
-
+        await expect(service.verifyOtp({ phone: 'any-phone', otp: '123456', purpose: OtpPurpose.RESET_PASSWORD } as any)).rejects.toThrow('Invalid OTP');
         expect(jwtMock.signAsync).not.toHaveBeenCalled();
-        expect(prismaMock.user.update).not.toHaveBeenCalled();
     });
 });
 
@@ -522,6 +508,9 @@ describe('AuthService - resetPassword', () => {
             findUnique: jest.fn(),
             update: jest.fn(),
         },
+        otp: {
+            deleteMany: jest.fn(),
+        },
     };
 
     const mockJwtService = {};
@@ -534,6 +523,9 @@ describe('AuthService - resetPassword', () => {
         get: jest.fn(),
     };
 
+    const pointsEngineMock = {
+        awardSignupBonus: jest.fn(),
+    };
 
     const bcryptMock = bcrypt as jest.Mocked<typeof bcrypt>;
 
@@ -568,6 +560,10 @@ describe('AuthService - resetPassword', () => {
                     provide: ConfigService,
                     useValue: mockConfigService,
                 },
+                {
+                    provide: PointsEngineService,
+                    useValue: pointsEngineMock,
+                },
             ],
         }).compile();
 
@@ -581,10 +577,11 @@ describe('AuthService - resetPassword', () => {
 
     it('should reset password successfully', async () => {
         // Arrange
-        prismaMock.user.findUnique.mockResolvedValue({ id: 'any-user' });
+        prismaMock.user.findUnique.mockResolvedValue({ id: 'any-user', phone: '123456789' });
         bcryptMock.hash.mockResolvedValue('hashed-password' as never);
 
         prismaMock.user.update.mockResolvedValue({} as any);
+        prismaMock.otp.deleteMany.mockResolvedValue({} as any);
 
         // Act
         const result = await service.resetPassword(validDto, jwtPayload as any);
@@ -660,6 +657,9 @@ describe('AuthService - changePassword', () => {
         get: jest.fn(),
     };
 
+    const mockPointsEngineService = {
+        awardSignupBonus: jest.fn(),
+    };
 
     beforeEach(async () => {
         prisma = {
@@ -677,6 +677,7 @@ describe('AuthService - changePassword', () => {
                 { provide: JwtService, useValue: mockJwtService },
                 { provide: SmsService, useValue: mockSmsService },
                 { provide: ConfigService, useValue: mockConfigService },
+                { provide: PointsEngineService, useValue: mockPointsEngineService },
 
             ],
 
@@ -786,6 +787,10 @@ describe('AuthService - deleteAccount', () => {
             delete: jest.fn(),
         },
     };
+
+    const mockPointsEngineService = {
+        awardSignupBonus: jest.fn(),
+    };
     beforeEach(async () => {
         jest.clearAllMocks();
 
@@ -807,6 +812,10 @@ describe('AuthService - deleteAccount', () => {
                 {
                     provide: ConfigService,
                     useValue: { get: jest.fn() },
+                },
+                {
+                    provide: PointsEngineService,
+                    useValue: mockPointsEngineService,
                 },
 
             ],

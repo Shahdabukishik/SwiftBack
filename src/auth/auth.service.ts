@@ -16,6 +16,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from './services/sms.service';
 import { OtpPurpose, OtpStatus } from '@prisma/client';
+import { PointsEngineService } from '../points-engine/points-engine.service';
 
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -33,6 +34,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly smsService: SmsService,
     private readonly configService: ConfigService,
+    private readonly pointsEngineService: PointsEngineService,
   ) {}
 
   async sendOtp(dto: SendOtpDto, reqUser: any = null, ipAddress: string | null = null) {
@@ -290,15 +292,20 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    await this.prisma.user.create({
+    const createdUser = await this.prisma.user.create({
       data: {
         firstName: dto.firstName,
         lastName: dto.lastName,
-        phone: dto.phone, 
+        phone: dto.phone,
         dateOfBirth: new Date(dto.dateOfBirth),
         password: hashedPassword,
         isVerified: false,
       },
+    });
+
+    await this.pointsEngineService.awardSignupBonus({
+      userId: createdUser.id,
+      createdBy: createdUser.id,
     });
 
     return {

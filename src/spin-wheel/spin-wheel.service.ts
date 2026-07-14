@@ -6,6 +6,7 @@ import {
 import { Prisma, SpinWheelPrize } from '@prisma/client';
 import { randomInt } from 'crypto';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { PointsEngineService } from 'src/points-engine/points-engine.service';
 import { SaveWheelConfigDto } from './dto/save-wheel-config.dto';
 
 const SETTINGS_ID = 1;
@@ -16,7 +17,10 @@ type Tx = Prisma.TransactionClient;
 
 @Injectable()
 export class SpinWheelService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pointsEngineService: PointsEngineService,
+  ) {}
 
   private async getOrCreateSettings(client: Tx | PrismaService = this.prisma, userId = 'system') {
     return client.spinWheelSettings.upsert({
@@ -216,7 +220,7 @@ export class SpinWheelService {
       const selected = this.selectWeightedPrize(activePrizes);
       const spunAt = new Date();
 
-      await tx.spinWheelSpin.create({
+      const spinRecord = await tx.spinWheelSpin.create({
         data: {
           userId,
           prizeId: selected.id,
@@ -226,8 +230,23 @@ export class SpinWheelService {
         },
       });
 
-      // Points crediting (SPIN_REWARD / SPIN_REWARD_MULTIPLIER) is owned by the
-      // future Points/Loyalty Ledger module — integration point, not implemented here.
+      if (selected.type === 'points') {
+        await this.pointsEngineService.awardSpinReward({
+          userId,
+          points: Number(selected.value.toNumber()),
+          spinWheelSpinId: spinRecord.id,
+          createdBy: userId,
+        });
+      }
+
+      if (selected.type === 'multiplier') {
+        await this.pointsEngineService.applySpinMultiplier({
+          userId,
+          multiplier: Number(selected.value.toNumber()),
+          spinWheelSpinId: spinRecord.id,
+          createdBy: userId,
+        });
+      }
 
       const nextEligibleAt = this.computeNextEligibleAt(spunAt, settings.cooldownHours)!;
 
