@@ -223,10 +223,23 @@ enum TransactionType {
   redeem
 }
 
+enum TransactionReferenceType {
+  SIGNUP
+  PURCHASE
+  SPIN
+  REWARD
+  BIRTHDAY
+  SYSTEM
+}
+
 model PointsTransaction {
   id           String          @id @default(uuid()) @db.Uuid
   userId       String          @map("user_id") 
   type         TransactionType
+
+  referenceType        TransactionReferenceType? @map("reference_type")
+  referenceId          String?                  @map("reference_id")
+
   points       Decimal         @db.Decimal(10, 2)
   balanceAfter Decimal         @map("balance_after") @db.Decimal(10, 2)
   createdAt    DateTime        @default(now()) @map("created_at")
@@ -235,6 +248,7 @@ model PointsTransaction {
  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([referenceType, referenceId])
   @@map("points_transactions")
 }
 

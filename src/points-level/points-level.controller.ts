@@ -8,6 +8,7 @@ import {
   Delete,
   UseGuards,
   Req,
+  Version,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -27,6 +28,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // Adjust path to 
 export class PointsLevelController {
   constructor(private readonly pointsLevelService: PointsLevelService) {}
 
+  @Version('1')
   @Post()
   @ApiOperation({ summary: 'Create a new loyalty level' })
   @ApiResponse({
@@ -45,6 +47,7 @@ export class PointsLevelController {
     );
   }
 
+  @Version('1')
   @Get()
   @ApiOperation({ summary: 'Retrieve all loyalty levels ordered by sortOrder' })
   @ApiResponse({
@@ -56,7 +59,8 @@ export class PointsLevelController {
     return await this.pointsLevelService.findAll();
   }
 
-  @Get(':id')
+  @Version('1')
+  @Get(':pointsLevelId')
   @ApiOperation({ summary: 'Retrieve a specific loyalty level by ID' })
   @ApiResponse({
     status: 200,
@@ -64,11 +68,12 @@ export class PointsLevelController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   @ApiResponse({ status: 404, description: 'Points level not found.' })
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('pointsLevelId') id: string) {
     return await this.pointsLevelService.findOne(id);
   }
 
-  @Patch(':id')
+  @Version('1')
+  @Patch(':pointsLevelId')
   @ApiOperation({ summary: 'Update a specific loyalty level' })
   @ApiResponse({
     status: 200,
@@ -89,7 +94,8 @@ export class PointsLevelController {
     );
   }
 
-  @Delete(':id')
+  @Version('1')
+  @Delete(':pointsLevelId')
   @ApiOperation({ summary: 'Delete a specific loyalty level' })
   @ApiResponse({
     status: 200,

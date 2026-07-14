@@ -14,6 +14,12 @@ import { MenuItemsModule } from './menu-items/menu-items.module';
 import { MenuItemImagesModule } from './menu-item-images/menu-item-images.module';
 import { PointsLevelModule } from './points-level/points-level.module';
 import { SpinWheelModule } from './spin-wheel/spin-wheel.module';
+import { PointsSettingsModule } from './points-settings/points-settings.module';
+import { PointsRewardModule } from './points-reward/points-reward.module';
+import { PointsUserStateModule } from './points-user-state/points-user-state.module';
+import { PointsTransactionsModule } from './points-transactions/points-transactions.module';
+import { PointsEngineModule } from './points-engine/points-engine.module';
+
 
 @Module({
   imports: [
@@ -35,6 +41,11 @@ import { SpinWheelModule } from './spin-wheel/spin-wheel.module';
     MenuItemImagesModule,
     PointsLevelModule,
     SpinWheelModule,
+    PointsSettingsModule,
+    PointsRewardModule,
+    PointsUserStateModule,
+    PointsTransactionsModule,
+    PointsEngineModule,
   ],
 })
 export class AppModule {}

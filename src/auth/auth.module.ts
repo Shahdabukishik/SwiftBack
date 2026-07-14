@@ -10,6 +10,7 @@ import { SmsService } from './services/sms.service';
 import { JwtPurposeGuard } from './guards/jwt-purpose.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
+import { PointsEngineModule } from '../points-engine/points-engine.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { OptionalJwtAuthGuard } from './guards/optional-jwt-auth.guard';
       inject: [ConfigService],
     }),
     ConfigModule,
+    PointsEngineModule,
   ],
   controllers: [AuthController],
   providers: [
