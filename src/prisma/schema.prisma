@@ -24,6 +24,11 @@ enum OtpStatus {
   EXPIRED
 }
 
+enum SpinPrizeType {
+  points
+  multiplier
+}
+
 model Otp {
   id          String      @id @default(uuid())
 
@@ -61,9 +66,10 @@ model User {
   isVerified  Boolean  @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
-  
+
   pointsTransactions PointsTransaction[]
   Otps Otp[]
+  spinWheelSpins SpinWheelSpin[]
 }
 
 model Store {
@@ -243,4 +249,45 @@ model PointsUserState {
   currentLevel       PointsLevel? @relation(fields: [currentLevelId], references: [id], onDelete: SetNull)
 
   @@map("points_user_state")
+}
+
+model SpinWheelPrize {
+  id                 String          @id @default(uuid())
+  label              String          @db.VarChar(50)
+  type               SpinPrizeType
+  value              Decimal         @db.Decimal(10, 2)
+  probabilityPercent Decimal         @db.Decimal(5, 2)
+  sortOrder          Int
+  active             Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  createdBy          String          @db.VarChar(100)
+  updatedBy          String          @db.VarChar(100)
+  spins              SpinWheelSpin[]
+
+  @@map("spin_wheel_prizes")
+}
+
+model SpinWheelSettings {
+  id            Int      @id @default(1)
+  cooldownHours Int      @default(24)
+  updatedAt     DateTime @updatedAt
+  updatedBy     String   @db.VarChar(100)
+
+  @@map("spin_wheel_settings")
+}
+
+model SpinWheelSpin {
+  id          String          @id @default(uuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  prizeId     String?
+  prize       SpinWheelPrize? @relation(fields: [prizeId], references: [id], onDelete: SetNull)
+  rewardType  SpinPrizeType
+  rewardValue Decimal         @db.Decimal(10, 2)
+  spunAt      DateTime
+  createdAt   DateTime        @default(now())
+
+  @@index([userId, spunAt])
+  @@map("spin_wheel_spins")
 }
