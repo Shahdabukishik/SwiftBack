@@ -107,7 +107,7 @@ export class PointsLevelController {
     status: 409,
     description: 'Cannot delete a loyalty level currently assigned to users.',
   })
-  async remove(@Param('id') id: string) {
+  async remove(@Param('pointsLevelId') id: string) {
     return await this.pointsLevelService.remove(id);
   }
 }
