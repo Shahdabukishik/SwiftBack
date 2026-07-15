@@ -83,7 +83,7 @@ export class PointsLevelController {
   @ApiResponse({ status: 401, description: 'Unauthorized.' })
   @ApiResponse({ status: 404, description: 'Points level not found.' })
   async update(
-    @Param('id') id: string,
+    @Param('pointsLevelId') id: string,
     @Body() updatePointsLevelDto: UpdatePointsLevelDto,
     @Req() req: any,
   ) {

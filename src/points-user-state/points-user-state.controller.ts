@@ -5,6 +5,7 @@ import {
   Query,
   UseGuards,
   Request,
+  Version,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,6 +26,7 @@ export class PointsUserStateController {
     private readonly pointsUserStateService: PointsUserStateService,
   ) {}
 
+  @Version('1')
   @Get('me')
   @ApiOperation({ summary: "Return the authenticated user's points information." })
   @ApiResponse({
@@ -35,6 +37,7 @@ export class PointsUserStateController {
     return this.pointsUserStateService.getUserState(req.user.userId);
   }
 
+  @Version('1')
   @Get()
   @ApiOperation({ summary: 'Return all user states, paginated and ordered by highest balance.' })
   @ApiResponse({
@@ -47,6 +50,7 @@ export class PointsUserStateController {
     return this.pointsUserStateService.getPaginatedStates(paginationDto);
   }
 
+  @Version('1')
   @Get(':userId')
   @ApiOperation({ summary: "Admin/Cashier helper: Return a specific user's points state." })
   @ApiResponse({
