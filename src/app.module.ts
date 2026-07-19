@@ -20,7 +20,7 @@ import { PointsUserStateModule } from './points-user-state/points-user-state.mod
 import { PointsTransactionsModule } from './points-transactions/points-transactions.module';
 import { PointsEngineModule } from './points-engine/points-engine.module';
 import { AdjustPointsModule } from './adjust-points/adjust-points.module';
-
+import { PointsRedeemModule } from './points-redeem/points-redeem.module';
 
 @Module({
   imports: [
@@ -48,6 +48,7 @@ import { AdjustPointsModule } from './adjust-points/adjust-points.module';
     PointsTransactionsModule,
     PointsEngineModule,
     AdjustPointsModule,
+    PointsRedeemModule,
   ],
 })
 export class AppModule {}

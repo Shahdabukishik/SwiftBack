@@ -30,46 +30,43 @@ enum SpinPrizeType {
 }
 
 model Otp {
-  id          String      @id @default(uuid())
+  id String @id @default(uuid())
 
-  phone       String
-   userId      String?
-  user         User? @relation(fields: [userId], references: [id], onDelete: Cascade)
-  code        String
-  purpose     OtpPurpose
-  status      OtpStatus   @default(PENDING)
+  phone   String
+  userId  String?
+  user    User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code    String
+  purpose OtpPurpose
+  status  OtpStatus  @default(PENDING)
 
-  attempts       Int        @default(0)
-  rateLimitLevel Int        @default(1)
+  attempts       Int       @default(0)
+  rateLimitLevel Int       @default(1)
   blockedUntil   DateTime?
-  requestCount   Int        @default(1)
+  requestCount   Int       @default(1)
   ipAddress      String?
 
-  expiresAt   DateTime
-  createdAt   DateTime    @default(now())
-
-
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }
 
 model User {
-  id           String    @id @default(uuid())
+  id String @id @default(uuid())
 
+  role        UserRole @default(CUSTOMER)
+  userName    String?
+  firstName   String
+  lastName    String
+  phone       String   @unique
+  dateOfBirth DateTime
+  password    String
 
-  role         UserRole @default(CUSTOMER)
-  userName     String?  
-  firstName    String
-  lastName     String
-  phone        String    @unique
-  dateOfBirth  DateTime
-  password     String
-
-  isVerified  Boolean  @default(false)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   pointsTransactions PointsTransaction[]
-  Otps Otp[]
-  spinWheelSpins SpinWheelSpin[]
+  Otps               Otp[]
+  spinWheelSpins     SpinWheelSpin[]
 }
 
 model Store {
@@ -98,31 +95,29 @@ model StoreImage {
 }
 
 model Advertisement {
-  id           String       @id @default(uuid())
+  id String @id @default(uuid())
 
-  name         String
-  description  String
-  images       AdvertisementImage[]
-  startDate    DateTime
-  endDate      DateTime
+  name        String
+  description String
+  images      AdvertisementImage[]
+  startDate   DateTime
+  endDate     DateTime
 
-
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
-
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model AdvertisementImage {
-  id        String   @id @default(uuid())
-  advertisementId   String
-  url       String
-  path      String
-  size      Int?
-  mimeType  String?
+  id              String  @id @default(uuid())
+  advertisementId String
+  url             String
+  path            String
+  size            Int?
+  mimeType        String?
 
   createdAt DateTime @default(now())
 
-  advertisement     Advertisement    @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
+  advertisement Advertisement @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
 }
 
 // Menu — uses Int auto-increment ids intentionally (frontend already built
@@ -155,8 +150,9 @@ model MenuItem {
   createdBy   String
   updatedBy   String
   images      MenuItemImage[]
-  
-  rewards     PointsReward[]
+
+  rewards PointsReward[]
+
   @@map("menu_items")
 }
 
@@ -174,18 +170,18 @@ model MenuItemImage {
 }
 
 model PointsLevel {
-  id               String            @id @default(uuid()) @db.Uuid
-  name             String            @db.VarChar(50) 
-  minPeriodPoints  Decimal           @map("min_period_points") @db.Decimal(10, 2) 
-  earnRate         Decimal           @map("earn_rate") @db.Decimal(10, 4) 
-  sortOrder        Int               @map("sort_order") 
-  createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @updatedAt @map("updated_at")
-  createdBy        String            @map("created_by") @db.VarChar(100) // JWT userId
-  updatedBy        String            @map("updated_by") @db.VarChar(100) // JWT userId
-  
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String   @db.VarChar(50)
+  minPeriodPoints Decimal  @map("min_period_points") @db.Decimal(10, 2)
+  earnRate        Decimal  @map("earn_rate") @db.Decimal(10, 4)
+  sortOrder       Int      @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdBy       String   @map("created_by") @db.VarChar(100) // JWT userId
+  updatedBy       String   @map("updated_by") @db.VarChar(100) // JWT userId
+
   // Relations
-  userStates       PointsUserState[]
+  userStates PointsUserState[]
 
   @@map("points_levels")
 }
@@ -208,8 +204,10 @@ model PointsReward {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
+  redeemItems PointsRedeemItem[]
+
   // Relations
-  menuItem       MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
 
   @@map("points_rewards")
 }
@@ -234,20 +232,21 @@ enum TransactionReferenceType {
 }
 
 model PointsTransaction {
-  id           String          @id @default(uuid()) @db.Uuid
-  userId       String          @map("user_id") 
-  type         TransactionType
+  id     String          @id @default(uuid()) @db.Uuid
+  userId String          @map("user_id")
+  type   TransactionType
 
-  referenceType        TransactionReferenceType? @map("reference_type")
-  referenceId          String?                  @map("reference_id")
-  reason        String? @db.VarChar(255)
+  referenceType TransactionReferenceType? @map("reference_type")
+  referenceId   String?                   @map("reference_id")
+  reason        String?                   @db.VarChar(255)
 
-  points       Decimal         @db.Decimal(10, 2)
-  balanceAfter Decimal         @map("balance_after") @db.Decimal(10, 2)
-  createdAt    DateTime        @default(now()) @map("created_at")
-  createdBy    String          @map("created_by") @db.VarChar(100)
+  points       Decimal            @db.Decimal(10, 2)
+  balanceAfter Decimal            @map("balance_after") @db.Decimal(10, 2)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  createdBy    String             @map("created_by") @db.VarChar(100)
+  redeemItems  PointsRedeemItem[]
 
- user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([referenceType, referenceId])
@@ -255,16 +254,36 @@ model PointsTransaction {
 }
 
 model PointsUserState {
-  userId             String       @id @map("user_id") @db.Uuid
-  currentBalance     Decimal      @map("current_balance") @db.Decimal(10, 2)
-  currentLevelId     String?      @map("current_level_id") @db.Uuid
-  periodPointsEarned Decimal      @map("period_points_earned") @db.Decimal(10, 2)
-  updatedAt          DateTime     @updatedAt @map("updated_at")
+  userId             String   @id @map("user_id") @db.Uuid
+  currentBalance     Decimal  @map("current_balance") @db.Decimal(10, 2)
+  currentLevelId     String?  @map("current_level_id") @db.Uuid
+  periodPointsEarned Decimal  @map("period_points_earned") @db.Decimal(10, 2)
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   // Relations
-  currentLevel       PointsLevel? @relation(fields: [currentLevelId], references: [id], onDelete: SetNull)
+  currentLevel PointsLevel? @relation(fields: [currentLevelId], references: [id], onDelete: SetNull)
 
   @@map("points_user_state")
+}
+
+model PointsRedeemItem {
+  id String @id @default(uuid()) @db.Uuid
+
+  transactionId String @map("transaction_id") @db.Uuid
+
+  rewardId String @map("reward_id") @db.Uuid
+
+  quantity Int
+
+  pointsPerItem Decimal @map("points_per_item") @db.Decimal(10, 2)
+
+  totalPoints Decimal @map("total_points") @db.Decimal(10, 2)
+
+  transaction PointsTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  reward PointsReward @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+
+  @@map("points_redeem_items")
 }
 
 model SpinWheelPrize {
