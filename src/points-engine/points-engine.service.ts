@@ -39,9 +39,15 @@ interface ApplySpinMultiplierInput extends BasePointsOperation {
 
 interface AwardBirthdayBonusInput extends BasePointsOperation { }
 
+interface RedeemRewardItemInput {
+  rewardId: string;
+  quantity: number;
+  pointsPerItem: Prisma.Decimal | number;
+}
+
 interface RedeemRewardInput extends BasePointsOperation {
   requiredPoints: number;
-  rewardId: string;
+  redeemItems: RedeemRewardItemInput[];
 }
 
 interface TransactionInput extends BasePointsOperation {
@@ -172,7 +178,9 @@ export class PointsEngineService {
 
   async redeemReward(input: RedeemRewardInput) {
     this.assertNonNegativeNumber(input.requiredPoints, 'requiredPoints');
-    this.assertRequiredId(input.rewardId, 'rewardId');
+    if (!input.redeemItems?.length) {
+      throw new BadRequestException('redeemItems must contain at least one item');
+    }
 
     return this.applyTransaction(
       {
@@ -181,9 +189,35 @@ export class PointsEngineService {
         type: 'redeem',
         mode: 'debit',
         referenceType: 'REWARD',
-        referenceId: input.rewardId,
+        referenceId: input.redeemItems[0]?.rewardId,
       },
       async () => -input.requiredPoints,
+      undefined,
+      async ({ tx, state }) => {
+        const transaction = await tx.pointsTransaction.create({
+          data: {
+            userId: input.userId,
+            type: 'redeem',
+            referenceType: 'REWARD',
+            referenceId: input.redeemItems[0]?.rewardId,
+            points: this.toDecimal(-input.requiredPoints),
+            balanceAfter: this.toDecimal(Number(state.currentBalance) - input.requiredPoints),
+            createdBy: input.createdBy,
+          },
+        });
+
+        await tx.pointsRedeemItem.createMany({
+          data: input.redeemItems.map((item) => ({
+            transactionId: transaction.id,
+            rewardId: item.rewardId,
+            quantity: item.quantity,
+            pointsPerItem: this.toDecimal(item.pointsPerItem),
+            totalPoints: this.toDecimal(Number(this.toDecimal(item.pointsPerItem)) * item.quantity),
+          })),
+        });
+
+        return transaction;
+      },
     );
   }
 
@@ -193,6 +227,7 @@ export class PointsEngineService {
       context: TransactionContext,
     ) => Promise<Prisma.Decimal | number>,
     metadata?: TransactionMetadata,
+    onTransactionCreated?: (context: { tx: Prisma.TransactionClient; state: { currentBalance: Prisma.Decimal; currentLevelId: string | null; periodPointsEarned: Prisma.Decimal; userId: string; }; }) => Promise<unknown>,
   ) {
     this.assertRequiredId(input.userId, 'userId');
     this.assertRequiredId(input.createdBy, 'createdBy');
@@ -281,6 +316,18 @@ export class PointsEngineService {
           currentLevelId: nextLevel?.id ?? state.currentLevelId ?? null,
         },
       });
+
+      if (onTransactionCreated) {
+        await onTransactionCreated({
+          tx,
+          state: {
+            userId: input.userId,
+            currentBalance: nextBalance,
+            currentLevelId: nextLevel?.id ?? state.currentLevelId ?? null,
+            periodPointsEarned: nextPeriodPoints,
+          },
+        });
+      }
 
       return {
         transaction,
