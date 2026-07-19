@@ -9,7 +9,8 @@ type TransactionKind =
   | 'spin_reward'
   | 'spin_multiplier'
   | 'birthday_bonus'
-  | 'redeem';
+  | 'redeem'
+  |  'admin_adjustment';
 
 type ReferenceKind = 'SIGNUP' | 'PURCHASE' | 'SPIN' | 'REWARD' | 'BIRTHDAY' | 'SYSTEM';
 
@@ -19,7 +20,7 @@ interface BasePointsOperation {
   referenceId?: string;
 }
 
-interface AwardSignupBonusInput extends BasePointsOperation {}
+interface AwardSignupBonusInput extends BasePointsOperation { }
 
 interface AwardPurchasePointsInput extends BasePointsOperation {
   purchaseAmount: number;
@@ -36,7 +37,7 @@ interface ApplySpinMultiplierInput extends BasePointsOperation {
   spinWheelSpinId: string;
 }
 
-interface AwardBirthdayBonusInput extends BasePointsOperation {}
+interface AwardBirthdayBonusInput extends BasePointsOperation { }
 
 interface RedeemRewardInput extends BasePointsOperation {
   requiredPoints: number;
@@ -48,6 +49,9 @@ interface TransactionInput extends BasePointsOperation {
   mode: PointsDirection;
   referenceType?: ReferenceKind;
   referenceId?: string;
+}
+interface TransactionMetadata {
+  reason?: string;
 }
 
 interface TransactionContext {
@@ -61,9 +65,14 @@ interface TransactionContext {
   };
 }
 
+interface AdminAdjustmentInput extends BasePointsOperation {
+  points: number;
+  reason: string;
+}
+
 @Injectable()
 export class PointsEngineService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   // Each public entrypoint intentionally delegates to applyTransaction() so
   // every points action shares one consistent path for validation, locking,
@@ -180,7 +189,10 @@ export class PointsEngineService {
 
   private async applyTransaction(
     input: TransactionInput,
-    resolvePoints: (context: TransactionContext) => Promise<Prisma.Decimal | number>,
+    resolvePoints: (
+      context: TransactionContext,
+    ) => Promise<Prisma.Decimal | number>,
+    metadata?: TransactionMetadata,
   ) {
     this.assertRequiredId(input.userId, 'userId');
     this.assertRequiredId(input.createdBy, 'createdBy');
@@ -257,6 +269,7 @@ export class PointsEngineService {
           points: signedDelta,
           balanceAfter: nextBalance,
           createdBy: input.createdBy,
+          reason: metadata?.reason,
         },
       });
 
@@ -354,5 +367,29 @@ export class PointsEngineService {
     }
 
     return new Prisma.Decimal(value);
+  }
+
+
+  async adminAdjustment(input: AdminAdjustmentInput) {
+    this.assertNonNegativeNumber(input.points, 'points');
+
+    if (!input.reason?.trim()) {
+      throw new BadRequestException('reason is required');
+    }
+
+    return this.applyTransaction(
+      {
+        userId: input.userId,
+        createdBy: input.createdBy,
+        type: 'admin_adjustment',
+        mode: 'credit',
+        referenceType: 'SYSTEM',
+      },
+      async () => input.points,
+      {
+        reason: input.reason,
+
+      },
+    );
   }
 }

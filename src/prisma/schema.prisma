@@ -221,6 +221,7 @@ enum TransactionType {
   spin_multiplier
   birthday_bonus
   redeem
+  admin_adjustment
 }
 
 enum TransactionReferenceType {
@@ -239,6 +240,7 @@ model PointsTransaction {
 
   referenceType        TransactionReferenceType? @map("reference_type")
   referenceId          String?                  @map("reference_id")
+  reason        String? @db.VarChar(255)
 
   points       Decimal         @db.Decimal(10, 2)
   balanceAfter Decimal         @map("balance_after") @db.Decimal(10, 2)
