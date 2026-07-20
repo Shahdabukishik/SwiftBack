@@ -79,6 +79,28 @@ export class PointsTransactionsService {
             phone: true,
           },
         },
+        redeemItems: {
+          select: {
+            rewardId: true,
+            quantity: true,
+            pointsPerItem: true,
+            totalPoints: true,
+            reward: {
+              select: {
+                menuItem: {
+                  select: {
+                    id: true,
+                    name: true,
+                    description: true,
+                    images: {
+                      select: { id: true, url: true },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -90,6 +112,13 @@ export class PointsTransactionsService {
       ...transaction,
       points: Number(transaction.points),
       balanceAfter: Number(transaction.balanceAfter),
+      redeemItems: transaction.redeemItems.map((item) => ({
+        rewardId: item.rewardId,
+        quantity: item.quantity,
+        pointsPerItem: Number(item.pointsPerItem),
+        totalPoints: Number(item.totalPoints),
+        menuItem: item.reward.menuItem,
+      })),
     };
   }
 }

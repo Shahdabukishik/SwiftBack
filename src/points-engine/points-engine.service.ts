@@ -193,19 +193,7 @@ export class PointsEngineService {
       },
       async () => -input.requiredPoints,
       undefined,
-      async ({ tx, state }) => {
-        const transaction = await tx.pointsTransaction.create({
-          data: {
-            userId: input.userId,
-            type: 'redeem',
-            referenceType: 'REWARD',
-            referenceId: input.redeemItems[0]?.rewardId,
-            points: this.toDecimal(-input.requiredPoints),
-            balanceAfter: this.toDecimal(Number(state.currentBalance) - input.requiredPoints),
-            createdBy: input.createdBy,
-          },
-        });
-
+      async ({ tx, transaction }) => {
         await tx.pointsRedeemItem.createMany({
           data: input.redeemItems.map((item) => ({
             transactionId: transaction.id,
@@ -215,8 +203,6 @@ export class PointsEngineService {
             totalPoints: this.toDecimal(Number(this.toDecimal(item.pointsPerItem)) * item.quantity),
           })),
         });
-
-        return transaction;
       },
     );
   }
@@ -227,7 +213,7 @@ export class PointsEngineService {
       context: TransactionContext,
     ) => Promise<Prisma.Decimal | number>,
     metadata?: TransactionMetadata,
-    onTransactionCreated?: (context: { tx: Prisma.TransactionClient; state: { currentBalance: Prisma.Decimal; currentLevelId: string | null; periodPointsEarned: Prisma.Decimal; userId: string; }; }) => Promise<unknown>,
+    onTransactionCreated?: (context: { tx: Prisma.TransactionClient; transaction: Prisma.PointsTransactionGetPayload<{}>; state: { currentBalance: Prisma.Decimal; currentLevelId: string | null; periodPointsEarned: Prisma.Decimal; userId: string; }; }) => Promise<unknown>,
   ) {
     this.assertRequiredId(input.userId, 'userId');
     this.assertRequiredId(input.createdBy, 'createdBy');
@@ -320,6 +306,7 @@ export class PointsEngineService {
       if (onTransactionCreated) {
         await onTransactionCreated({
           tx,
+          transaction,
           state: {
             userId: input.userId,
             currentBalance: nextBalance,
