@@ -281,6 +281,8 @@ export class PointsEngineService {
           ? await this.resolveLevel(tx, nextPeriodPoints)
           : currentLevel;
 
+      const { storeId, storeName, cashierName } = await this.resolveCashierBranch(tx, input.createdBy);
+
       const transaction = await tx.pointsTransaction.create({
         data: {
           userId: input.userId,
@@ -291,6 +293,9 @@ export class PointsEngineService {
           balanceAfter: nextBalance,
           createdBy: input.createdBy,
           reason: metadata?.reason,
+          storeId,
+          storeName,
+          cashierName,
         },
       });
 
@@ -354,6 +359,23 @@ export class PointsEngineService {
     return tx.pointsLevel.findUnique({
       where: { id: levelId },
     });
+  }
+
+  private async resolveCashierBranch(tx: Prisma.TransactionClient, createdBy: string) {
+    const cashier = await tx.user.findUnique({
+      where: { id: createdBy },
+      include: { storeCashier: { include: { store: true } } },
+    });
+
+    if (cashier?.role !== 'CASHIER' || !cashier.storeCashier) {
+      return { storeId: null, storeName: null, cashierName: null };
+    }
+
+    return {
+      storeId: cashier.storeCashier.storeId,
+      storeName: cashier.storeCashier.store.name,
+      cashierName: `${cashier.firstName} ${cashier.lastName}`,
+    };
   }
 
   private async getPointsSettings(tx: Prisma.TransactionClient) {
