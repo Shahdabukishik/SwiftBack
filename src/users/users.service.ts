@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersQueryDto } from './dto/users-query.dto';
@@ -107,5 +107,27 @@ export class UsersService {
     }
 
     return user;
+  }
+
+  async assignStore(userId: string, storeId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.role !== 'CASHIER') {
+      throw new BadRequestException('User is not a cashier');
+    }
+
+    const store = await this.prisma.store.findUnique({ where: { id: storeId } });
+    if (!store) {
+      throw new NotFoundException('Store not found');
+    }
+
+    return this.prisma.storeCashier.upsert({
+      where: { cashierId: userId },
+      update: { storeId },
+      create: { cashierId: userId, storeId },
+    });
   }
 }

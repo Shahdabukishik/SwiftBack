@@ -1,10 +1,11 @@
-import { Controller, Get, Param, UseGuards, Version } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, UseGuards, Version } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UsersService } from './users.service';
 import { Query } from '@nestjs/common';
 import { UsersQueryDto } from './dto/users-query.dto';
 import { SearchUsersDto } from './dto/search-users.dto';
+import { AssignStoreDto } from './dto/assign-store.dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -82,5 +83,16 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'User not found' })
   async findOne(@Param('userId') id: string) {
     return await this.usersService.findOne(id);
+  }
+
+  @Version('1')
+  @Patch(':userId/store')
+  @ApiOperation({ summary: 'Assign a cashier to a store' })
+  @ApiResponse({ status: 200, description: 'Cashier assigned to store successfully' })
+  @ApiResponse({ status: 400, description: 'User is not a cashier' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'User or store not found' })
+  async assignStore(@Param('userId') userId: string, @Body() dto: AssignStoreDto) {
+    return this.usersService.assignStore(userId, dto.storeId);
   }
 }

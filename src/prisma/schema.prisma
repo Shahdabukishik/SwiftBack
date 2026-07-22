@@ -67,6 +67,7 @@ model User {
   pointsTransactions PointsTransaction[]
   Otps               Otp[]
   spinWheelSpins     SpinWheelSpin[]
+  storeCashier       StoreCashier?
 }
 
 model Store {
@@ -80,7 +81,24 @@ model Store {
   location     Json?
   images       StoreImage[]
 
+  cashiers           StoreCashier[]
+  pointsTransactions PointsTransaction[]
+
   @@map("stores")
+}
+
+// One-to-one: a cashier is assigned to exactly one store, but a store can
+// have many cashiers. Deleting either side just removes the assignment row.
+model StoreCashier {
+  id        String @id @default(cuid())
+  cashierId String @unique @map("cashier_id")
+  storeId   String @map("store_id")
+
+  cashier User  @relation(fields: [cashierId], references: [id], onDelete: Cascade)
+  store   Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@map("store_cashiers")
 }
 
 model StoreImage {
@@ -246,10 +264,20 @@ model PointsTransaction {
   createdBy    String             @map("created_by") @db.VarChar(100)
   redeemItems  PointsRedeemItem[]
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Snapshot of the acting cashier's branch at write time — frozen on
+  // creation so it survives the Store or the cashier's User row being
+  // deleted or renamed later. storeId stays a live FK for joins/filters
+  // while the store still exists.
+  storeId     String? @map("store_id")
+  storeName   String? @map("store_name") @db.VarChar(150)
+  cashierName String? @map("cashier_name") @db.VarChar(150)
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([referenceType, referenceId])
+  @@index([storeId])
   @@map("points_transactions")
 }
 
