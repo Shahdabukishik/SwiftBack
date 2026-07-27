@@ -6,14 +6,19 @@ import { Query } from '@nestjs/common';
 import { UsersQueryDto } from './dto/users-query.dto';
 import { SearchUsersDto } from './dto/search-users.dto';
 import { AssignStoreDto } from './dto/assign-store.dto';
+import { Roles } from 'src/auth/decorator/roles.decorator';
+import { UserRole } from './enums/user-role.enum';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import {Req} from '@nestjs/common';
+import { ConfirmDobDto } from './dto/confirm-dob-dto'
 
 @ApiTags('Users')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) { }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Version('1')
   @Get()
   @ApiOperation({ summary: 'Get all users' })
@@ -44,8 +49,10 @@ export class UsersController {
   }
 
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Version('1')
   @Get('search')
+  @Roles(UserRole.ADMIN, UserRole.CASHIER)
   @ApiOperation({ summary: 'Search users by first name, last name, or phone' })
   @ApiResponse({ status: 200, description: 'Users returned successfully' })
   @ApiResponse({ status: 400, description: 'Missing or invalid query' })
@@ -74,9 +81,10 @@ export class UsersController {
     return this.usersService.search(query);
   }
 
-
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Version('1')
   @Get(':userId')
+  @Roles(UserRole.ADMIN, UserRole.CASHIER)
   @ApiOperation({ summary: 'Get user by id' })
   @ApiResponse({ status: 200, description: 'User returned successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -85,8 +93,10 @@ export class UsersController {
     return await this.usersService.findOne(id);
   }
 
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Version('1')
   @Patch(':userId/store')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Assign a cashier to a store' })
   @ApiResponse({ status: 200, description: 'Cashier assigned to store successfully' })
   @ApiResponse({ status: 400, description: 'User is not a cashier' })
@@ -94,5 +104,24 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'User or store not found' })
   async assignStore(@Param('userId') userId: string, @Body() dto: AssignStoreDto) {
     return this.usersService.assignStore(userId, dto.storeId);
+  }
+
+  @Version('1')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Patch('me/date-of-birth')
+  @ApiOperation({
+    summary: 'Confirm date of birth',
+    description:
+      'Allows the authenticated user to confirm or update their date of birth once. After confirmation, the date of birth cannot be changed.',
+  })
+  async confirmDob(
+    @Req() req: any,
+    @Body() dto: ConfirmDobDto,
+  ) {
+    return this.usersService.confirmDob(
+      req.user.userId,
+      dto.dateOfBirth,
+    );
   }
 }
