@@ -130,4 +130,41 @@ export class UsersService {
       create: { cashierId: userId, storeId },
     });
   }
+
+  async confirmDob(userId: string, dateOfBirth: string) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        isDobConfirmed: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.isDobConfirmed) {
+      throw new BadRequestException(
+        'Date of birth has already been confirmed and cannot be changed',
+      );
+    }
+
+    return this.prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        dateOfBirth: new Date(dateOfBirth),
+        isDobConfirmed: true,
+      },
+      select: {
+        id: true,
+        dateOfBirth: true,
+        isDobConfirmed: true,
+      },
+    });
+  }
 }

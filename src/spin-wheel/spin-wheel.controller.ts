@@ -40,9 +40,8 @@ export class SpinWheelController {
 
   @Version('1')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard,RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @Get()
-  @Roles(UserRole.CUSTOMER)
   @ApiOperation({ summary: 'Get wheel (customer)' })
   @ApiResponse({ status: 200, description: 'Wheel returned successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -52,9 +51,8 @@ export class SpinWheelController {
 
   @Version('1')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard,RolesGuard)
+  @UseGuards(JwtAuthGuard)
   @Post('spin')
-  @Roles(UserRole.CUSTOMER)
   @ApiOperation({ summary: 'Spin the wheel (customer)' })
   @ApiResponse({ status: 200, description: 'Spin result returned successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })

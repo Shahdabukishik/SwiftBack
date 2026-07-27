@@ -59,6 +59,7 @@ model User {
   dateOfBirth DateTime
   password    String
 
+  isDobConfirmed Boolean @default(false)
   isVerified Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
