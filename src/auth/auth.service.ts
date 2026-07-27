@@ -15,7 +15,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from './services/sms.service';
-import { OtpPurpose, OtpStatus } from '@prisma/client';
+import { OtpPurpose, OtpStatus, Prisma } from '@prisma/client';
 import { PointsEngineService } from '../points-engine/points-engine.service';
 
 import { RegisterDto } from './dto/register.dto';
@@ -25,7 +25,11 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { EditAccountDto } from './dto/edit-account.dto';
+import { CreateUserByAdminDto } from './dto/create-user-by-admin-dto';
+
 import { JwtPurposePayload } from './guards/jwt-purpose.guard';
+import { UserRole } from 'src/users/enums/user-role.enum';
+import { UpdateUserByAdminDto } from './dto/update-user-by-admin-sto';
 
 @Injectable()
 export class AuthService {
@@ -35,10 +39,10 @@ export class AuthService {
     private readonly smsService: SmsService,
     private readonly configService: ConfigService,
     private readonly pointsEngineService: PointsEngineService,
-  ) {}
+  ) { }
 
   async sendOtp(dto: SendOtpDto, reqUser: any = null, ipAddress: string | null = null) {
-  
+
     const { phone, purpose } = dto;
     const user = await this.prisma.user.findUnique({ where: { phone } });
 
@@ -122,7 +126,7 @@ export class AuthService {
           data: { rateLimitLevel: phoneLevel, blockedUntil: phoneBlockedUntil, requestCount: 0 },
         });
       }
-      
+
       // Update IP record if it's separate from the phone record
       if (ipShouldBlock && latestIpOtp && latestIpOtp.id !== latestPhoneOtp?.id) {
         await this.prisma.otp.update({
@@ -209,7 +213,7 @@ export class AuthService {
 
     if (!isOtpValid) {
       const newAttempts = otp.attempts + 1;
-      
+
       if (newAttempts >= 5) {
         await this.prisma.otp.update({
           where: { id: otp.id },
@@ -274,7 +278,7 @@ export class AuthService {
       if (!reqUser || !reqUser.userId) {
         throw new UnauthorizedException('Authentication required to verify change-phone OTP');
       }
-      
+
       const changePhoneToken = await this.jwtService.signAsync(
         { sub: reqUser.userId, phone: dto.phone, purpose: 'change-phone' },
         { secret, expiresIn: '15m' },
@@ -493,5 +497,122 @@ export class AuthService {
 
   private generateOtp(): string {
     return '0000';
+  }
+
+
+  async createUserByAdmin(dto: CreateUserByAdminDto) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: {
+        phone: dto.phone,
+      },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('A user with this phone number already exists.');
+    }
+
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+
+    const user = await this.prisma.user.create({
+      data: {
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        phone: dto.phone,
+        dateOfBirth: new Date(dto.dateOfBirth),
+        password: hashedPassword,
+        role: dto.role ?? UserRole.CUSTOMER,
+        isVerified: true,
+        isDobConfirmed: true,
+      },
+    });
+
+    const { password, ...result } = user;
+
+    return result;
+  }
+
+  async updateUserByAdmin(
+    userId: string,
+    dto: UpdateUserByAdminDto,
+  ) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!existingUser) {
+      throw new NotFoundException('User not found.');
+    }
+
+    if (dto.phone && dto.phone !== existingUser.phone) {
+      const phoneExists = await this.prisma.user.findUnique({
+        where: {
+          phone: dto.phone,
+        },
+      });
+
+      if (phoneExists) {
+        throw new ConflictException(
+          'A user with this phone number already exists.',
+        );
+      }
+    }
+
+    
+    const data: Prisma.UserUpdateInput = {
+      ...(dto.firstName !== undefined && {
+        firstName: dto.firstName,
+      }),
+      ...(dto.lastName !== undefined && {
+        lastName: dto.lastName,
+      }),
+      ...(dto.phone !== undefined && {
+        phone: dto.phone,
+      }),
+      ...(dto.role !== undefined && {
+        role: dto.role,
+      }),
+      ...(dto.dateOfBirth !== undefined && {
+        dateOfBirth: new Date(dto.dateOfBirth),
+      }),
+    };
+
+    if (dto.password) {
+      data.password = await bcrypt.hash(dto.password, 10);
+    }
+
+    const updatedUser = await this.prisma.user.update({
+      where: {
+        id: userId,
+      },
+      data,
+    });
+
+    const { password, ...result } = updatedUser;
+
+    return result;
+  }
+
+  async deleteUserByAdmin(userId: string) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!existingUser) {
+      throw new NotFoundException('User not found.');
+    }
+
+    await this.prisma.user.delete({
+      where: {
+        id: userId,
+      },
+    });
+
+    return {
+      message: 'User deleted successfully.',
+    };
   }
 }

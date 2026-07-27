@@ -21,6 +21,7 @@ export class UsersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Version('1')
   @Get()
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get all users' })
   @ApiResponse({ status: 200, description: 'Users returned successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
