@@ -3,16 +3,21 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SpinWheelService } from './spin-wheel.service';
 import { SaveWheelConfigDto } from './dto/save-wheel-config.dto';
+import { UserRole } from 'src/users/enums/user-role.enum';
+import { Roles } from 'src/auth/decorator/roles.decorator';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
 
 @ApiTags('Spin Wheel')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+
 @Controller('spin-wheel')
 export class SpinWheelController {
-  constructor(private readonly spinWheelService: SpinWheelService) {}
+  constructor(private readonly spinWheelService: SpinWheelService) { }
 
   @Version('1')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard,RolesGuard)
   @Get('config')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get wheel config (admin)' })
   @ApiResponse({ status: 200, description: 'Wheel config returned successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -21,7 +26,10 @@ export class SpinWheelController {
   }
 
   @Version('1')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard,RolesGuard)
   @Put('config')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Save wheel config (admin)' })
   @ApiResponse({ status: 200, description: 'Wheel config saved successfully' })
   @ApiResponse({ status: 400, description: 'Prize probabilities must sum to 100%' })
@@ -31,7 +39,10 @@ export class SpinWheelController {
   }
 
   @Version('1')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard,RolesGuard)
   @Get()
+  @Roles(UserRole.CUSTOMER)
   @ApiOperation({ summary: 'Get wheel (customer)' })
   @ApiResponse({ status: 200, description: 'Wheel returned successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -40,7 +51,10 @@ export class SpinWheelController {
   }
 
   @Version('1')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard,RolesGuard)
   @Post('spin')
+  @Roles(UserRole.CUSTOMER)
   @ApiOperation({ summary: 'Spin the wheel (customer)' })
   @ApiResponse({ status: 200, description: 'Spin result returned successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })

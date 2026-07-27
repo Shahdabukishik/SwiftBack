@@ -1,11 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException , ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { GetPointsTransactionsDto } from './dot/get-points-transactions.dto';
+import { UserRole } from '@prisma/client';
 
 @Injectable()
 export class PointsTransactionsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async getUserHistory(userId: string, dto: GetPointsTransactionsDto, checkUserExists = false) {
     if (checkUserExists) {
@@ -61,7 +62,11 @@ export class PointsTransactionsService {
     };
   }
 
-  async getTransactionDetails(id: string) {
+  async getTransactionDetails(id: string,
+    currentUser: {
+      userId: string;
+      role: UserRole;
+    },) {
     const transaction = await this.prisma.pointsTransaction.findUnique({
       where: { id },
       select: {
@@ -108,6 +113,18 @@ export class PointsTransactionsService {
       throw new NotFoundException(`Transaction with ID ${id} not found`);
     }
 
+    const isAdminOrCashier =
+      currentUser.role === UserRole.ADMIN ||
+      currentUser.role === UserRole.CASHIER;
+
+    if (
+      !isAdminOrCashier &&
+      transaction.user.id !== currentUser.userId
+    ) {
+      throw new ForbiddenException(
+        'You are not allowed to access this transaction',
+      );
+    }
     return {
       ...transaction,
       points: Number(transaction.points),

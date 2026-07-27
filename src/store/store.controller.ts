@@ -21,7 +21,9 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UseGuards } from '@nestjs/common';
-
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorator/roles.decorator';
+import { UserRole } from 'src/users/enums/user-role.enum';
 
 
 @Controller('/v1/stores')
@@ -30,8 +32,9 @@ export class StoreController {
 
 
     @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard,RolesGuard)
     @Post()
+    @Roles(UserRole.ADMIN)
     create(@Body() dto: CreateStoreDto) {
         return this.storeService.create(dto);
     }
@@ -49,15 +52,17 @@ export class StoreController {
     }
 
     @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard,RolesGuard)
     @Delete(':storeId')
+    @Roles(UserRole.ADMIN)
     remove(@Param('storeId') id: string) {
         return this.storeService.remove(id);
     }
 
     @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard,RolesGuard)
     @Patch(':storeId')
+    @Roles(UserRole.ADMIN)
     update(
         @Param('storeId') id: string,
         @Body() dto: UpdateStoreDto,

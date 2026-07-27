@@ -10,7 +10,7 @@ type TransactionKind =
   | 'spin_multiplier'
   | 'birthday_bonus'
   | 'redeem'
-  |  'admin_adjustment';
+  | 'admin_adjustment';
 
 type ReferenceKind = 'SIGNUP' | 'PURCHASE' | 'SPIN' | 'REWARD' | 'BIRTHDAY' | 'SYSTEM';
 
@@ -24,7 +24,6 @@ interface AwardSignupBonusInput extends BasePointsOperation { }
 
 interface AwardPurchasePointsInput extends BasePointsOperation {
   purchaseAmount: number;
-  purchaseId: string;
 }
 
 interface AwardSpinRewardInput extends BasePointsOperation {
@@ -101,8 +100,7 @@ export class PointsEngineService {
   }
 
   async awardPurchasePoints(input: AwardPurchasePointsInput) {
-    this.assertNonNegativeNumber(input.purchaseAmount, 'purchaseAmount');
-    this.assertRequiredId(input.purchaseId, 'purchaseId');
+    this.assertPositiveNumber(input.purchaseAmount, 'purchaseAmount');
 
     return this.applyTransaction(
       {
@@ -111,11 +109,18 @@ export class PointsEngineService {
         type: 'purchase_earn',
         mode: 'credit',
         referenceType: 'PURCHASE',
-        referenceId: input.purchaseId,
       },
       async ({ currentLevel }) => {
-        const earnRate = Number(currentLevel?.earnRate ?? 0);
-        return input.purchaseAmount * earnRate;
+        if (!currentLevel) {
+          throw new BadRequestException(
+            'User does not have a valid points level',
+          );
+        }
+
+        const purchaseAmount = new Prisma.Decimal(input.purchaseAmount);
+        const earnRate = new Prisma.Decimal(currentLevel.earnRate);
+
+        return purchaseAmount.mul(earnRate);
       },
     );
   }
@@ -404,6 +409,19 @@ export class PointsEngineService {
   private assertNonNegativeNumber(value: number, name: string) {
     if (value === null || value === undefined || Number.isNaN(value) || value < 0) {
       throw new BadRequestException(`${name} must be a non-negative number`);
+    }
+  }
+
+  private assertPositiveNumber(value: number, name: string) {
+    if (
+      value === null ||
+      value === undefined ||
+      Number.isNaN(value) ||
+      value <= 0
+    ) {
+      throw new BadRequestException(
+        `${name} must be greater than 0`,
+      );
     }
   }
 

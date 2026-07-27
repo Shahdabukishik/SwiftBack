@@ -16,16 +16,20 @@ import {
 import { PointsUserStateService } from './points-user-state.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // Adjust path to your AuthGuard
 import { PaginationDto } from '../common/dto/pagination.dto';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorator/roles.decorator';
+import { UserRole } from 'src/users/enums/user-role.enum';
 
 @ApiTags('Points User State')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('points-user-state')
 export class PointsUserStateController {
   constructor(
     private readonly pointsUserStateService: PointsUserStateService,
-  ) {}
+  ) { }
 
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Version('1')
   @Get('me')
   @ApiOperation({ summary: "Return the authenticated user's points information." })
@@ -37,8 +41,12 @@ export class PointsUserStateController {
     return this.pointsUserStateService.getUserState(req.user.userId);
   }
 
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Version('1')
   @Get()
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Return all user states, paginated and ordered by highest balance.' })
   @ApiResponse({
     status: 200,
@@ -50,8 +58,12 @@ export class PointsUserStateController {
     return this.pointsUserStateService.getPaginatedStates(paginationDto);
   }
 
+
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Version('1')
   @Get(':userId')
+  @Roles(UserRole.ADMIN, UserRole.CASHIER)
   @ApiOperation({ summary: "Admin/Cashier helper: Return a specific user's points state." })
   @ApiResponse({
     status: 200,

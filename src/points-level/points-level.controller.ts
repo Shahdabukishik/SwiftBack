@@ -20,16 +20,21 @@ import { PointsLevelService } from './points-level.service';
 import { CreatePointsLevelDto } from './dto/create-points-level.dto';
 import { UpdatePointsLevelDto } from './dto/update-points-level.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // Adjust path to your JWT Guard
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorator/roles.decorator';
+import { UserRole } from 'src/users/enums/user-role.enum';
+
 
 @ApiTags('points levels')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('points-levels')
 export class PointsLevelController {
   constructor(private readonly pointsLevelService: PointsLevelService) {}
 
   @Version('1')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard,RolesGuard)
   @Post()
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Create a new loyalty level' })
   @ApiResponse({
     status: 201,
@@ -73,7 +78,10 @@ export class PointsLevelController {
   }
 
   @Version('1')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard,RolesGuard)
   @Patch(':pointsLevelId')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Update a specific loyalty level' })
   @ApiResponse({
     status: 200,
@@ -95,7 +103,10 @@ export class PointsLevelController {
   }
 
   @Version('1')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard,RolesGuard)
   @Delete(':pointsLevelId')
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Delete a specific loyalty level' })
   @ApiResponse({
     status: 200,

@@ -7,15 +7,19 @@ import { BadRequestException } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UseGuards } from '@nestjs/common';
 import { DeleteAdvertisementImagesDto } from './dto/delete-advertisement-images.dto';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorator/roles.decorator';
+import { UserRole
 
 
+ } from 'src/users/enums/user-role.enum';
 @ApiTags('Advertisement Images')
 @Controller('advertisement-images')
 export class AdvertisementImagesController {
     constructor(private readonly advertisementImagesService: AdvertisementImagesService) { }
 
     @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard)
+    @UseGuards(JwtAuthGuard,RolesGuard)
     @Version('1')
     @ApiConsumes('multipart/form-data')
     @ApiBody({
@@ -33,6 +37,7 @@ export class AdvertisementImagesController {
         },
     })
     @Post(':advertisementId')
+    @Roles(UserRole.ADMIN)
     @UseInterceptors(FilesInterceptor('images', 10, {
         limits: {
             fileSize: 5 * 1024 * 1024, // 5 MB
@@ -68,6 +73,7 @@ export class AdvertisementImagesController {
     @UseGuards(JwtAuthGuard)
     @Version('1')
     @Delete(':imagesId')
+    @Roles(UserRole.ADMIN)
     deleteImages(
         @Body() dto: DeleteAdvertisementImagesDto,
     ) {

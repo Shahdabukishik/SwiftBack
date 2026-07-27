@@ -9,6 +9,10 @@ import { PointsSettingsService } from './points-settings.service';
 import { UpdatePointsSettingsDto } from './dto/update-points-settings.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'; // Adjust path to your auth guard
 import { Request } from 'express';
+import { Roles } from 'src/auth/decorator/roles.decorator';
+import { UserRole } from 'src/users/enums/user-role.enum';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+
 
 // Interface to type the modified request object from the JwtAuthGuard
 interface RequestWithUser extends Request {
@@ -19,12 +23,13 @@ interface RequestWithUser extends Request {
 }
 
 @ApiTags('Points Settings')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+
 @Controller('points-settings')
 export class PointsSettingsController {
-  constructor(private readonly pointsSettingsService: PointsSettingsService) {}
+  constructor(private readonly pointsSettingsService: PointsSettingsService) { }
 
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
   @Version('1')
   @Get()
   @ApiOperation({
@@ -37,8 +42,11 @@ export class PointsSettingsController {
     return this.pointsSettingsService.getSettings();
   }
 
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Version('1')
   @Patch()
+  @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Update system points settings',
     description: 'Updates specific fields in the points settings singleton record.',
