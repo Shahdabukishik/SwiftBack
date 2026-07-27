@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AdjustPointsDto } from './dto/adjust-points.dto';
+import { AddPurchasePointsDto } from './dto/add-purchase-points.dto';
 import { PointsEngineService } from '../points-engine/points-engine.service';
 
 @Injectable()
@@ -10,15 +10,13 @@ export class AdjustPointsService {
     ) { }
 
     async addPoints(
-        userId: string,
-        dto: AdjustPointsDto,
-        adminId: string,
+        dto: AddPurchasePointsDto,
+        cashierId: string,
     ) {
-        return this.pointsEngineService.adminAdjustment({
-            userId,
-            createdBy: adminId,
-            points: dto.points,
-            reason: dto.reason,
+        return this.pointsEngineService.awardPurchasePoints({
+            userId: dto.userId,
+            createdBy: cashierId,
+            purchaseAmount: dto.purchaseAmount,
         });
     }
 }

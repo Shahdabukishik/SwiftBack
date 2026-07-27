@@ -53,7 +53,6 @@ model User {
   id String @id @default(uuid())
 
   role        UserRole @default(CUSTOMER)
-  userName    String?
   firstName   String
   lastName    String
   phone       String   @unique

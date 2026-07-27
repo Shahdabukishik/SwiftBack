@@ -5,8 +5,9 @@ import { UpdateAdvertisementDto } from './dto/update-advertisement.dto';
 import { ApiTags, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UseGuards } from '@nestjs/common';
-
-
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorator/roles.decorator';
+import { UserRole } from 'src/users/enums/user-role.enum';
 
 
 @ApiTags('Advertisements')
@@ -18,8 +19,9 @@ export class AdvertisementController {
 
   @Version('1')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard,RolesGuard)
   @Post()
+  @Roles(UserRole.ADMIN)
   create(@Body() dto: CreateAdvertisementDto) {
     return this.advertisementService.create(dto);
   }
@@ -38,8 +40,9 @@ export class AdvertisementController {
 
   @Version('1')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard,RolesGuard)
   @Patch(':advertisementId')
+  @Roles(UserRole.ADMIN)
   update(
     @Param('advertisementId') id: string,
     @Body() dto: UpdateAdvertisementDto,
@@ -51,9 +54,9 @@ export class AdvertisementController {
 
   @Version('1')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard)
-  
+  @UseGuards(JwtAuthGuard,RolesGuard)
   @Delete(':advertisementId')
+  @Roles(UserRole.ADMIN)
   remove(@Param('advertisementId') id: string) {
     
     return this.advertisementService.remove(id);

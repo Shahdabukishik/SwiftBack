@@ -3,6 +3,9 @@ import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagg
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RedeemPointsDto } from './dto/redeem-points.dto';
 import { RedeemPointsService } from './points-redeem.service';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorator/roles.decorator';
+import { UserRole } from 'src/users/enums/user-role.enum';
 
 @ApiTags('Points Redeem')
 @ApiBearerAuth()
@@ -11,8 +14,9 @@ export class PointsRedeemController {
   constructor(private readonly redeemPointsService: RedeemPointsService) {}
 
   @Version('1')
-  @UseGuards(JwtAuthGuard)
-  @Post()
+  @UseGuards(JwtAuthGuard,RolesGuard)
+  @Post('users')
+  @Roles(UserRole.ADMIN,UserRole.CASHIER)
   @ApiOperation({ summary: 'Redeem points for one or more rewards', description: 'Redeems multiple rewards in a single transaction using the authenticated user as the creator.' })
   @ApiResponse({ status: 201, description: 'Redeem completed successfully', schema: { example: {
     transaction: {

@@ -4,6 +4,10 @@ import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UseGuards, Post, Body, Request } from '@nestjs/common';
 import { AdjustPointsDto } from './dto/adjust-points.dto';
 import { AdjustPointsService } from './adjust-points.service';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/auth/decorator/roles.decorator';
+import { UserRole } from 'src/users/enums/user-role.enum';
+import { AddPurchasePointsDto } from './dto/add-purchase-points.dto';
 
 @ApiTags('Admin Points')
 @Controller('adjust-points')
@@ -15,17 +19,14 @@ export class AdjustPointsController {
 
     @Version('1')
     @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard)
-    @Post('users/:userId/add')
-    @ApiOperation({ summary: 'Add points to a user' })
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Post()
+    @Roles(UserRole.ADMIN, UserRole.CASHIER)
     async addPoints(
-        @Param('userId', ParseUUIDPipe) userId: string,
-        @Body() dto: AdjustPointsDto,
-        @Req() req,
+        @Body() dto: AddPurchasePointsDto,
+        @Req() req: any,
     ) {
-        
         return this.adjustPointsService.addPoints(
-            userId,
             dto,
             req.user.userId,
         );
