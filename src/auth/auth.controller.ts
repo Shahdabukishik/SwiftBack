@@ -25,11 +25,17 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { EditAccountDto } from './dto/edit-account.dto';
 import { SendOtpDto } from './dto/send-otp.dto';
+import { CreateUserByAdminDto } from './dto/create-user-by-admin-dto';
+import { UpdateUserByAdminDto } from './dto/update-user-by-admin-sto';
+
+import { RolesGuard } from './guards/roles.guard';
+import { UserRole } from 'src/users/enums/user-role.enum';
+import { Roles } from './decorator/roles.decorator';
 
 @ApiTags('Users')
 @Controller('users')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Version('1')
   @Post('send-otp')
@@ -37,7 +43,7 @@ export class AuthController {
   @UseGuards(OptionalJwtAuthGuard)
   async sendOtp(@Body() dto: SendOtpDto, @Req() req: any) {
     let ipAddress: string | null = null;
-    
+
     // Extract IP from x-forwarded-for header or fallback to request IP
     const xForwardedFor = req.headers['x-forwarded-for'];
     if (xForwardedFor) {
@@ -47,7 +53,7 @@ export class AuthController {
         ipAddress = xForwardedFor.split(',')[0].trim();
       }
     }
-    
+
     if (!ipAddress) {
       ipAddress = req.ip || null;
     }
@@ -142,5 +148,35 @@ export class AuthController {
       throw new ForbiddenException('You are not allowed to delete this account');
     }
     return this.authService.deleteAccount(userId);
+  }
+
+  @Version('1')
+  @Post('admin/users')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  createUserByAdmin(@Body() dto: CreateUserByAdminDto) {
+    return this.authService.createUserByAdmin(dto);
+  }
+
+  @Version('1')
+  @Patch('admin/users/:userId')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  updateUserByAdmin(
+    @Param('userId') userId: string,
+    @Body() dto: UpdateUserByAdminDto,
+  ) {
+    return this.authService.updateUserByAdmin(userId, dto);
+  }
+
+  @Version('1')
+  @Delete('admin/users/:userId')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  deleteUserByAdmin(@Param('userId') userId: string) {
+    return this.authService.deleteUserByAdmin(userId);
   }
 }
