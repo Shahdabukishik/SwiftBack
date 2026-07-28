@@ -461,7 +461,7 @@ export class PointsEngineService {
         mode: input.mode,
         referenceType: 'SYSTEM',
       },
-      async () => input.points,
+      async () => input.mode === 'debit' ? -input.points : input.points,
       {
         reason: input.reason,
       },

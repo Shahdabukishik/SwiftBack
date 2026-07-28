@@ -29,7 +29,7 @@ export class AdjustPointsService {
             createdBy: adminId,
             points: dto.points,
             mode: 'credit',
-            reason: 'Points added by admin',
+            reason: `Points added by admin : ${dto.reason} `,
         });
     }
 
@@ -39,7 +39,7 @@ export class AdjustPointsService {
             createdBy: adminId,
             points: dto.points,
             mode: 'debit',
-            reason: 'Points removed by admin',
+            reason: ` Points removed by admin : ${dto.reason} `,
         });
     }
 }
