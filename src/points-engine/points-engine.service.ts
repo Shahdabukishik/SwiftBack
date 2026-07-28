@@ -73,6 +73,7 @@ interface TransactionContext {
 interface AdminAdjustmentInput extends BasePointsOperation {
   points: number;
   reason: string;
+  mode: PointsDirection;
 }
 
 @Injectable()
@@ -100,6 +101,7 @@ export class PointsEngineService {
   }
 
   async awardPurchasePoints(input: AwardPurchasePointsInput) {
+
     this.assertPositiveNumber(input.purchaseAmount, 'purchaseAmount');
 
     return this.applyTransaction(
@@ -445,7 +447,7 @@ export class PointsEngineService {
 
 
   async adminAdjustment(input: AdminAdjustmentInput) {
-    this.assertNonNegativeNumber(input.points, 'points');
+    this.assertPositiveNumber(input.points, 'points');
 
     if (!input.reason?.trim()) {
       throw new BadRequestException('reason is required');
@@ -456,13 +458,12 @@ export class PointsEngineService {
         userId: input.userId,
         createdBy: input.createdBy,
         type: 'admin_adjustment',
-        mode: 'credit',
+        mode: input.mode,
         referenceType: 'SYSTEM',
       },
       async () => input.points,
       {
         reason: input.reason,
-
       },
     );
   }
