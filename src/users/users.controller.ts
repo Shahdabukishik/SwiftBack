@@ -9,7 +9,7 @@ import { AssignStoreDto } from './dto/assign-store.dto';
 import { Roles } from 'src/auth/decorator/roles.decorator';
 import { UserRole } from './enums/user-role.enum';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
-import {Req} from '@nestjs/common';
+import { Req } from '@nestjs/common';
 import { ConfirmDobDto } from './dto/confirm-dob-dto'
 
 @ApiTags('Users')
@@ -96,15 +96,15 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Version('1')
-  @Patch(':userId/store')
+  @Patch('/store')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Assign a cashier to a store' })
   @ApiResponse({ status: 200, description: 'Cashier assigned to store successfully' })
   @ApiResponse({ status: 400, description: 'User is not a cashier' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'User or store not found' })
-  async assignStore(@Param('userId') userId: string, @Body() dto: AssignStoreDto) {
-    return this.usersService.assignStore(userId, dto.storeId);
+  async assignStore(@Body() dto: AssignStoreDto) {
+    return this.usersService.assignStore(dto.userId, dto.storeId);
   }
 
   @Version('1')
