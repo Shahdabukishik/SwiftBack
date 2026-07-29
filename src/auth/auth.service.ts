@@ -508,13 +508,18 @@ export class AuthService {
         firstName: true,
         lastName: true,
         phone: true,
+        dateOfBirth: true,
+        isDobConfirmed: true,
         role: true,
       },
     });
 
+    const accessToken = await this.issueAccessToken(updatedUser);
+
     return {
       message: 'Account updated successfully',
       user: updatedUser,
+      access_token: accessToken,
     };
   }
 
