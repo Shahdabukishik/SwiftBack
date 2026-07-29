@@ -15,7 +15,7 @@ import { ConfigService } from '@nestjs/config';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { SmsService } from './services/sms.service';
-import { OtpPurpose, OtpStatus, Prisma } from '@prisma/client';
+import { OtpPurpose, OtpStatus, Prisma, User } from '@prisma/client';
 import { PointsEngineService } from '../points-engine/points-engine.service';
 
 import { RegisterDto } from './dto/register.dto';
@@ -338,23 +338,39 @@ export class AuthService {
       throw new UnauthorizedException('Account is not verified.');
     }
 
+    const accessToken = await this.issueAccessToken(user);
+
+    return {
+      access_token: accessToken,
+    };
+  }
+
+  async issueAccessToken(
+    user: Pick<
+      User,
+      | 'id'
+      | 'phone'
+      | 'firstName'
+      | 'lastName'
+      | 'dateOfBirth'
+      | 'isDobConfirmed'
+      | 'role'
+    >,
+  ) {
     const payload = {
       sub: user.id,
       phone: user.phone,
       firstName: user.firstName,
       lastName: user.lastName,
       dateOfBirth: user.dateOfBirth,
+      isDobConfirmed: user.isDobConfirmed,
       role: user.role,
     };
 
-    const accessToken = await this.jwtService.signAsync(payload, {
+    return this.jwtService.signAsync(payload, {
       secret: this.configService.get<string>('JWT_SECRET')!,
       expiresIn: this.configService.get<string>('JWT_EXPIRATION_TIME') as StringValue,
     });
-
-    return {
-      access_token: accessToken,
-    };
   }
 
   async resetPassword(dto: ResetPasswordDto, payload: JwtPurposePayload) {
@@ -486,6 +502,13 @@ export class AuthService {
       data: {
         firstName: dto.firstName,
         lastName: dto.lastName,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        role: true,
       },
     });
 

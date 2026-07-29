@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthService } from '../auth/auth.service';
 import { UsersQueryDto } from './dto/users-query.dto';
 import { SearchUsersDto } from './dto/search-users.dto';
 
@@ -17,7 +18,10 @@ const userSelect = {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly authService: AuthService,
+  ) { }
 
   async findAll(query: UsersQueryDto) {
 
@@ -138,7 +142,12 @@ export class UsersService {
       },
       select: {
         id: true,
+        phone: true,
+        firstName: true,
+        lastName: true,
+        dateOfBirth: true,
         isDobConfirmed: true,
+        role: true,
       },
     });
 
@@ -147,12 +156,20 @@ export class UsersService {
     }
 
     if (user.isDobConfirmed) {
-      throw new BadRequestException(
-        'Date of birth has already been confirmed and cannot be changed',
-      );
+      // Already confirmed: don't change the stored date, just re-sync the
+      // client with a fresh token in case it's still holding a stale one
+      // (e.g. from before the token started carrying isDobConfirmed).
+      const accessToken = await this.authService.issueAccessToken(user);
+
+      return {
+        id: user.id,
+        dateOfBirth: user.dateOfBirth,
+        isDobConfirmed: user.isDobConfirmed,
+        access_token: accessToken,
+      };
     }
 
-    return this.prisma.user.update({
+    const updatedUser = await this.prisma.user.update({
       where: {
         id: userId,
       },
@@ -162,9 +179,22 @@ export class UsersService {
       },
       select: {
         id: true,
+        phone: true,
+        firstName: true,
+        lastName: true,
         dateOfBirth: true,
         isDobConfirmed: true,
+        role: true,
       },
     });
+
+    const accessToken = await this.authService.issueAccessToken(updatedUser);
+
+    return {
+      id: updatedUser.id,
+      dateOfBirth: updatedUser.dateOfBirth,
+      isDobConfirmed: updatedUser.isDobConfirmed,
+      access_token: accessToken,
+    };
   }
 }
