@@ -127,7 +127,7 @@ export class PointsEngineService {
     );
   }
 
-  async awardSpinReward(input: AwardSpinRewardInput) {
+  async awardSpinReward(input: AwardSpinRewardInput, tx?: Prisma.TransactionClient) {
     this.assertNonNegativeNumber(input.points, 'points');
     this.assertRequiredId(input.spinWheelSpinId, 'spinWheelSpinId');
 
@@ -141,10 +141,13 @@ export class PointsEngineService {
         referenceId: input.spinWheelSpinId,
       },
       async () => input.points,
+      undefined,
+      undefined,
+      tx,
     );
   }
 
-  async applySpinMultiplier(input: ApplySpinMultiplierInput) {
+  async applySpinMultiplier(input: ApplySpinMultiplierInput, tx?: Prisma.TransactionClient) {
     this.assertRequiredId(input.spinWheelSpinId, 'spinWheelSpinId');
     if (input.multiplier <= 1) {
       throw new BadRequestException('multiplier must be greater than 1');
@@ -163,6 +166,9 @@ export class PointsEngineService {
         const balance = Number(state.currentBalance);
         return balance * input.multiplier - balance;
       },
+      undefined,
+      undefined,
+      tx,
     );
   }
 
@@ -221,11 +227,12 @@ export class PointsEngineService {
     ) => Promise<Prisma.Decimal | number>,
     metadata?: TransactionMetadata,
     onTransactionCreated?: (context: { tx: Prisma.TransactionClient; transaction: Prisma.PointsTransactionGetPayload<{}>; state: { currentBalance: Prisma.Decimal; currentLevelId: string | null; periodPointsEarned: Prisma.Decimal; userId: string; }; }) => Promise<unknown>,
+    externalTx?: Prisma.TransactionClient,
   ) {
     this.assertRequiredId(input.userId, 'userId');
     this.assertRequiredId(input.createdBy, 'createdBy');
 
-    return this.prisma.$transaction(async (tx) => {
+    const run = async (tx: Prisma.TransactionClient) => {
       await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${input.userId}::text))`);
 
       const user = await tx.user.findUnique({
@@ -337,7 +344,9 @@ export class PointsEngineService {
           currentLevel: nextLevel,
         },
       };
-    });
+    };
+
+    return externalTx ? run(externalTx) : this.prisma.$transaction(run);
   }
 
   private async resolveLevel(
