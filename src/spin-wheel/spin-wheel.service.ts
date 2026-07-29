@@ -236,7 +236,7 @@ export class SpinWheelService {
           points: Number(selected.value.toNumber()),
           spinWheelSpinId: spinRecord.id,
           createdBy: userId,
-        });
+        }, tx);
       }
 
       if (selected.type === 'multiplier') {
@@ -245,7 +245,7 @@ export class SpinWheelService {
           multiplier: Number(selected.value.toNumber()),
           spinWheelSpinId: spinRecord.id,
           createdBy: userId,
-        });
+        }, tx);
       }
 
       const nextEligibleAt = this.computeNextEligibleAt(spunAt, settings.cooldownHours)!;
