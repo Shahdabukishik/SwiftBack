@@ -32,27 +32,27 @@ export class StoreController {
 
 
     @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard,RolesGuard)
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Post()
     @Roles(UserRole.ADMIN)
     create(@Body() dto: CreateStoreDto) {
         return this.storeService.create(dto);
     }
 
-    
+
     @Get()
     findAll() {
         return this.storeService.findAll();
     }
 
-    
+
     @Get(':storeId')
     findOne(@Param('storeId') id: string) {
         return this.storeService.findOne(id);
     }
 
     @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard,RolesGuard)
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Delete(':storeId')
     @Roles(UserRole.ADMIN)
     remove(@Param('storeId') id: string) {
@@ -60,7 +60,7 @@ export class StoreController {
     }
 
     @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard,RolesGuard)
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Patch(':storeId')
     @Roles(UserRole.ADMIN)
     update(
@@ -71,4 +71,11 @@ export class StoreController {
     }
 
 
+    @ApiBearerAuth()
+    @UseGuards(JwtAuthGuard, RolesGuard)
+    @Patch(':storeId/toggle-status')
+    @Roles(UserRole.ADMIN)
+    toggleStatus(@Param('storeId') id: string) {
+        return this.storeService.toggleStatus(id);
+    }
 }
