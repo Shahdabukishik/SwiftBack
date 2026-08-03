@@ -102,6 +102,20 @@ export class StoreService {
         });
     }
 
+    async toggleStatus(id: string) {
+        const store = await this.prisma.store.findUnique({
+            where: { id },
+        });
 
+        if (!store) {
+            throw new NotFoundException('Store not found');
+        }
 
+        return this.prisma.store.update({
+            where: { id },
+            data: {
+                isActive: !store.isActive,
+            },
+        });
+    }
 }

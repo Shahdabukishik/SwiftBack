@@ -79,6 +79,7 @@ model Store {
   updatedAt    DateTime     @updatedAt
   workingHours Json?
   location     Json?
+  isActive     Boolean      @default(true)
   images       StoreImage[]
 
   cashiers           StoreCashier[]
