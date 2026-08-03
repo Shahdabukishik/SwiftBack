@@ -28,6 +28,7 @@ export class MenuService {
           name: item.name,
           description: item.description,
           price: item.price,
+          sortOrder: item.sortOrder,
           images: item.images.map((image) => image.url),
         })),
       })),
