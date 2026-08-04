@@ -58,7 +58,16 @@ export class AdvertisementController {
   @Delete(':advertisementId')
   @Roles(UserRole.ADMIN)
   remove(@Param('advertisementId') id: string) {
-    
+
     return this.advertisementService.remove(id);
+  }
+
+  @Version('1')
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard,RolesGuard)
+  @Patch(':advertisementId/toggle-status')
+  @Roles(UserRole.ADMIN)
+  toggleStatus(@Param('advertisementId') id: string) {
+    return this.advertisementService.toggleStatus(id);
   }
 }
