@@ -107,4 +107,21 @@ export class AdvertisementService {
       message: 'Advertisement deleted successfully',
     };
   }
+
+  async toggleStatus(id: string) {
+    const advertisement = await this.prisma.advertisement.findUnique({
+      where: { id },
+    });
+
+    if (!advertisement) {
+      throw new NotFoundException('Advertisement not found');
+    }
+
+    return this.prisma.advertisement.update({
+      where: { id },
+      data: {
+        isActive: !advertisement.isActive,
+      },
+    });
+  }
 }
