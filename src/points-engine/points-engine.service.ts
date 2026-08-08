@@ -12,7 +12,13 @@ type TransactionKind =
   | 'redeem'
   | 'admin_adjustment';
 
-type ReferenceKind = 'SIGNUP' | 'PURCHASE' | 'SPIN' | 'REWARD' | 'BIRTHDAY' | 'SYSTEM';
+type ReferenceKind =
+  | 'SIGNUP'
+  | 'PURCHASE'
+  | 'SPIN'
+  | 'REWARD'
+  | 'BIRTHDAY'
+  | 'SYSTEM';
 
 interface BasePointsOperation {
   userId: string;
@@ -20,10 +26,15 @@ interface BasePointsOperation {
   referenceId?: string;
 }
 
-interface AwardSignupBonusInput extends BasePointsOperation { }
+interface AwardSignupBonusInput extends BasePointsOperation {}
 
 interface AwardPurchasePointsInput extends BasePointsOperation {
   purchaseAmount: number;
+  // When set, skips the createdBy -> cashier -> store lookup and stamps the
+  // transaction with this store directly. Used when points are awarded
+  // without a cashier present (e.g. a customer claiming a finished guest
+  // order themselves) — there's no cashier branch to resolve in that case.
+  storeOverride?: { storeId: string; storeName: string } | null;
 }
 
 interface AwardSpinRewardInput extends BasePointsOperation {
@@ -36,7 +47,7 @@ interface ApplySpinMultiplierInput extends BasePointsOperation {
   spinWheelSpinId: string;
 }
 
-interface AwardBirthdayBonusInput extends BasePointsOperation { }
+interface AwardBirthdayBonusInput extends BasePointsOperation {}
 
 interface RedeemRewardItemInput {
   rewardId: string;
@@ -54,6 +65,7 @@ interface TransactionInput extends BasePointsOperation {
   mode: PointsDirection;
   referenceType?: ReferenceKind;
   referenceId?: string;
+  storeOverride?: { storeId: string; storeName: string } | null;
 }
 interface TransactionMetadata {
   reason?: string;
@@ -78,7 +90,7 @@ interface AdminAdjustmentInput extends BasePointsOperation {
 
 @Injectable()
 export class PointsEngineService {
-  constructor(private readonly prisma: PrismaService) { }
+  constructor(private readonly prisma: PrismaService) {}
 
   // Each public entrypoint intentionally delegates to applyTransaction() so
   // every points action shares one consistent path for validation, locking,
@@ -101,7 +113,6 @@ export class PointsEngineService {
   }
 
   async awardPurchasePoints(input: AwardPurchasePointsInput) {
-
     this.assertPositiveNumber(input.purchaseAmount, 'purchaseAmount');
 
     return this.applyTransaction(
@@ -111,6 +122,8 @@ export class PointsEngineService {
         type: 'purchase_earn',
         mode: 'credit',
         referenceType: 'PURCHASE',
+        referenceId: input.referenceId,
+        storeOverride: input.storeOverride,
       },
       async ({ currentLevel }) => {
         if (!currentLevel) {
@@ -127,7 +140,10 @@ export class PointsEngineService {
     );
   }
 
-  async awardSpinReward(input: AwardSpinRewardInput, tx?: Prisma.TransactionClient) {
+  async awardSpinReward(
+    input: AwardSpinRewardInput,
+    tx?: Prisma.TransactionClient,
+  ) {
     this.assertNonNegativeNumber(input.points, 'points');
     this.assertRequiredId(input.spinWheelSpinId, 'spinWheelSpinId');
 
@@ -147,7 +163,10 @@ export class PointsEngineService {
     );
   }
 
-  async applySpinMultiplier(input: ApplySpinMultiplierInput, tx?: Prisma.TransactionClient) {
+  async applySpinMultiplier(
+    input: ApplySpinMultiplierInput,
+    tx?: Prisma.TransactionClient,
+  ) {
     this.assertRequiredId(input.spinWheelSpinId, 'spinWheelSpinId');
     if (input.multiplier <= 1) {
       throw new BadRequestException('multiplier must be greater than 1');
@@ -192,7 +211,9 @@ export class PointsEngineService {
   async redeemReward(input: RedeemRewardInput) {
     this.assertNonNegativeNumber(input.requiredPoints, 'requiredPoints');
     if (!input.redeemItems?.length) {
-      throw new BadRequestException('redeemItems must contain at least one item');
+      throw new BadRequestException(
+        'redeemItems must contain at least one item',
+      );
     }
 
     return this.applyTransaction(
@@ -213,7 +234,9 @@ export class PointsEngineService {
             rewardId: item.rewardId,
             quantity: item.quantity,
             pointsPerItem: this.toDecimal(item.pointsPerItem),
-            totalPoints: this.toDecimal(Number(this.toDecimal(item.pointsPerItem)) * item.quantity),
+            totalPoints: this.toDecimal(
+              Number(this.toDecimal(item.pointsPerItem)) * item.quantity,
+            ),
           })),
         });
       },
@@ -226,14 +249,25 @@ export class PointsEngineService {
       context: TransactionContext,
     ) => Promise<Prisma.Decimal | number>,
     metadata?: TransactionMetadata,
-    onTransactionCreated?: (context: { tx: Prisma.TransactionClient; transaction: Prisma.PointsTransactionGetPayload<{}>; state: { currentBalance: Prisma.Decimal; currentLevelId: string | null; periodPointsEarned: Prisma.Decimal; userId: string; }; }) => Promise<unknown>,
+    onTransactionCreated?: (context: {
+      tx: Prisma.TransactionClient;
+      transaction: Prisma.PointsTransactionGetPayload<{}>;
+      state: {
+        currentBalance: Prisma.Decimal;
+        currentLevelId: string | null;
+        periodPointsEarned: Prisma.Decimal;
+        userId: string;
+      };
+    }) => Promise<unknown>,
     externalTx?: Prisma.TransactionClient,
   ) {
     this.assertRequiredId(input.userId, 'userId');
     this.assertRequiredId(input.createdBy, 'createdBy');
 
     const run = async (tx: Prisma.TransactionClient) => {
-      await tx.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${input.userId}::text))`);
+      await tx.$executeRaw(
+        Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${input.userId}::text))`,
+      );
 
       const user = await tx.user.findUnique({
         where: { id: input.userId },
@@ -287,7 +321,9 @@ export class PointsEngineService {
 
       const nextPeriodPoints =
         input.mode === 'credit'
-          ? this.toDecimal(Number(currentPeriodPoints) + Math.max(0, Number(signedDelta)))
+          ? this.toDecimal(
+              Number(currentPeriodPoints) + Math.max(0, Number(signedDelta)),
+            )
           : currentPeriodPoints;
 
       const nextLevel =
@@ -295,7 +331,13 @@ export class PointsEngineService {
           ? await this.resolveLevel(tx, nextPeriodPoints)
           : currentLevel;
 
-      const { storeId, storeName, cashierName } = await this.resolveCashierBranch(tx, input.createdBy);
+      const { storeId, storeName, cashierName } = input.storeOverride
+        ? {
+            storeId: input.storeOverride.storeId,
+            storeName: input.storeOverride.storeName,
+            cashierName: null,
+          }
+        : await this.resolveCashierBranch(tx, input.createdBy);
 
       const transaction = await tx.pointsTransaction.create({
         data: {
@@ -377,7 +419,10 @@ export class PointsEngineService {
     });
   }
 
-  private async resolveCashierBranch(tx: Prisma.TransactionClient, createdBy: string) {
+  private async resolveCashierBranch(
+    tx: Prisma.TransactionClient,
+    createdBy: string,
+  ) {
     const cashier = await tx.user.findUnique({
       where: { id: createdBy },
       include: { storeCashier: { include: { store: true } } },
@@ -418,7 +463,12 @@ export class PointsEngineService {
   }
 
   private assertNonNegativeNumber(value: number, name: string) {
-    if (value === null || value === undefined || Number.isNaN(value) || value < 0) {
+    if (
+      value === null ||
+      value === undefined ||
+      Number.isNaN(value) ||
+      value < 0
+    ) {
       throw new BadRequestException(`${name} must be a non-negative number`);
     }
   }
@@ -430,9 +480,7 @@ export class PointsEngineService {
       Number.isNaN(value) ||
       value <= 0
     ) {
-      throw new BadRequestException(
-        `${name} must be greater than 0`,
-      );
+      throw new BadRequestException(`${name} must be greater than 0`);
     }
   }
 
@@ -442,7 +490,9 @@ export class PointsEngineService {
     }
   }
 
-  private toDecimal(value: number | Prisma.Decimal | null | undefined): Prisma.Decimal {
+  private toDecimal(
+    value: number | Prisma.Decimal | null | undefined,
+  ): Prisma.Decimal {
     if (value === null || value === undefined || Number.isNaN(value)) {
       return new Prisma.Decimal(0);
     }
@@ -453,7 +503,6 @@ export class PointsEngineService {
 
     return new Prisma.Decimal(value);
   }
-
 
   async adminAdjustment(input: AdminAdjustmentInput) {
     this.assertPositiveNumber(input.points, 'points');
@@ -470,7 +519,7 @@ export class PointsEngineService {
         mode: input.mode,
         referenceType: 'SYSTEM',
       },
-      async () => input.mode === 'debit' ? -input.points : input.points,
+      async () => (input.mode === 'debit' ? -input.points : input.points),
       {
         reason: input.reason,
       },

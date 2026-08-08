@@ -69,6 +69,7 @@ model User {
   spinWheelSpins     SpinWheelSpin[]
   orders             Order[]
   storeCashier       StoreCashier?
+  customerOrders     CustomerOrder[]
 }
 
 model Store {
@@ -371,23 +372,27 @@ enum OrderStatus {
 enum OrderType {
   PICKUP
   DELIVERY
+  IN_STORE
 }
 
 model Order {
   id      String      @id @default(uuid())
-  userId  String?
+  userId  String
   storeId String
   type   OrderType    @default(PICKUP)
   status  OrderStatus @default(PENDING)
 
   total    Decimal @db.Decimal(10, 2)
+  phone    String
+  note     String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user  User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user  User        @relation(fields: [userId], references: [id], onDelete: Restrict)
   store Store       @relation(fields: [storeId], references: [id], onDelete: Restrict)
   items OrderItem[]
+  customerOrder CustomerOrder?
 
   @@index([userId])
   @@index([storeId])
@@ -412,4 +417,17 @@ model OrderItem {
   @@index([orderId])
   @@index([menuItemId])
   @@map("order_items")
+}
+
+model CustomerOrder {
+  customerId String
+  orderId    String   @unique
+  createdAt  DateTime @default(now())
+
+  customer User  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  order    Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@id([customerId, orderId])
+  @@index([customerId])
+  @@map("customer_order")
 }
