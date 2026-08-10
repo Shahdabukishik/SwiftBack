@@ -806,10 +806,15 @@ export class OrdersService {
 
   /**
    * Admin override for status/note/total. Does not run the cashier
-   * status-transition rules, and does not adjust points already
-   * awarded if the total changes.
+   * status-transition rules, but - like the cashier flow and claiming -
+   * does award points when the status lands on FINISHED. Does not
+   * adjust points already awarded if the total changes.
    */
-  async adminUpdate(orderId: string, dto: AdminUpdateOrderDto) {
+  async adminUpdate(
+    orderId: string,
+    dto: AdminUpdateOrderDto,
+    adminId: string,
+  ) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
       select: { id: true },
@@ -819,7 +824,7 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    return this.prisma.order.update({
+    const updatedOrder = await this.prisma.order.update({
       where: { id: orderId },
       data: {
         ...(dto.status !== undefined ? { status: dto.status } : {}),
@@ -833,6 +838,17 @@ export class OrdersService {
         },
       },
     });
+
+    if (dto.status === OrderStatus.FINISHED) {
+      await this.awardOrderPoints({
+        orderId: updatedOrder.id,
+        userId: updatedOrder.userId,
+        createdBy: adminId,
+        purchaseAmount: Number(updatedOrder.total),
+      });
+    }
+
+    return updatedOrder;
   }
 
   /**

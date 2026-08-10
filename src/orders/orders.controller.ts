@@ -134,12 +134,13 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   async adminUpdate(
+    @Req() req: any,
     @Param('id')
     orderId: string,
     @Body()
     dto: AdminUpdateOrderDto,
   ) {
-    return this.ordersService.adminUpdate(orderId, dto);
+    return this.ordersService.adminUpdate(orderId, dto, req.user.userId);
   }
 
   /**
