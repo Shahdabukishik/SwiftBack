@@ -10,13 +10,17 @@ import { isUUID } from 'class-validator';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { PointsEngineService } from '../points-engine/points-engine.service';
+import { UserRole } from '../users/enums/user-role.enum';
 
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CreateInStoreOrderDto } from './dto/create-in-store-order.dto';
-import { AdminOrdersQueryDto } from './dto/admin-orders-query.dto';
+import { OrdersQueryDto } from './dto/orders-query.dto';
 import { AdminUpdateOrderDto } from './dto/admin-update-order.dto';
 import { DELIVERY_FEE, GUEST_USER_ID } from './orders.constants';
+
+// How far back a cashier can see their own store's order history.
+const CASHIER_HISTORY_DAYS = 3;
 
 @Injectable()
 export class OrdersService {
@@ -317,72 +321,87 @@ export class OrdersService {
   }
 
   /**
-   * Get today's orders for the cashier's assigned store.
+   * List orders, paginated and optionally filtered by status/type/store.
+   *
+   * - ADMIN: sees every store, no date restriction, storeId filter optional.
+   * - CASHIER: always scoped to their own assigned store, and capped to the
+   *   last CASHIER_HISTORY_DAYS days — any storeId they pass is ignored.
    */
-  async getCashierOrders(cashierId: string) {
-    // --------------------------------------------------
-    // 1. Get Cashier Store Assignment
-    // --------------------------------------------------
+  async findOrders(
+    caller: { userId: string; role: UserRole },
+    query: OrdersQueryDto,
+  ) {
+    const { page, limit, status, type, storeId } = query;
 
-    const storeCashier = await this.prisma.storeCashier.findUnique({
-      where: {
-        cashierId,
-      },
+    const skip = (page - 1) * limit;
 
-      select: {
-        storeId: true,
-      },
-    });
+    let effectiveStoreId = storeId;
+    let createdAt: Prisma.OrderWhereInput['createdAt'];
 
-    if (!storeCashier) {
-      throw new NotFoundException('Cashier is not assigned to a store');
+    if (caller.role === UserRole.CASHIER) {
+      const storeCashier = await this.prisma.storeCashier.findUnique({
+        where: {
+          cashierId: caller.userId,
+        },
+
+        select: {
+          storeId: true,
+        },
+      });
+
+      if (!storeCashier) {
+        throw new NotFoundException('Cashier is not assigned to a store');
+      }
+
+      effectiveStoreId = storeCashier.storeId;
+
+      const historyStart = new Date();
+
+      historyStart.setDate(
+        historyStart.getDate() - (CASHIER_HISTORY_DAYS - 1),
+      );
+      historyStart.setHours(0, 0, 0, 0);
+
+      createdAt = { gte: historyStart };
     }
 
-    // --------------------------------------------------
-    // 2. Calculate Today's Date Range
-    // --------------------------------------------------
+    const where: Prisma.OrderWhereInput = {
+      ...(status ? { status } : {}),
+      ...(type ? { type } : {}),
+      ...(effectiveStoreId ? { storeId: effectiveStoreId } : {}),
+      ...(createdAt ? { createdAt } : {}),
+    };
 
-    const now = new Date();
-
-    const startOfDay = new Date(now);
-
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(now);
-
-    endOfDay.setHours(23, 59, 59, 999);
-
-    // --------------------------------------------------
-    // 3. Get Today's Store Orders
-    // --------------------------------------------------
-
-    return this.prisma.order.findMany({
-      where: {
-        storeId: storeCashier.storeId,
-
-        createdAt: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
-      },
-
-      orderBy: {
-        createdAt: 'desc',
-      },
-
-      include: {
-        items: true,
-
-        user: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            phone: true,
+    const [orders, totalItems] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          store: {
+            select: { id: true, name: true },
           },
+          user: {
+            select: { id: true, firstName: true, lastName: true, phone: true },
+          },
+          items: true,
         },
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+
+    return {
+      data: orders,
+      meta: {
+        page,
+        limit,
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+        hasNextPage: page < Math.ceil(totalItems / limit),
+        hasPreviousPage: page > 1,
       },
-    });
+    };
   }
 
   /**
@@ -783,55 +802,6 @@ export class OrdersService {
         error instanceof Error ? error.stack : undefined,
       );
     }
-  }
-
-  /**
-   * List every order in the system (admin only), paginated and
-   * optionally filtered by status/type/store.
-   */
-  async adminFindAll(query: AdminOrdersQueryDto) {
-    const { page, limit, status, type, storeId } = query;
-
-    const skip = (page - 1) * limit;
-
-    const where: Prisma.OrderWhereInput = {
-      ...(status ? { status } : {}),
-      ...(type ? { type } : {}),
-      ...(storeId ? { storeId } : {}),
-    };
-
-    const [orders, totalItems] = await Promise.all([
-      this.prisma.order.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          store: {
-            select: { id: true, name: true },
-          },
-          user: {
-            select: { id: true, firstName: true, lastName: true, phone: true },
-          },
-          _count: {
-            select: { items: true },
-          },
-        },
-      }),
-      this.prisma.order.count({ where }),
-    ]);
-
-    return {
-      data: orders,
-      meta: {
-        page,
-        limit,
-        totalItems,
-        totalPages: Math.ceil(totalItems / limit),
-        hasNextPage: page < Math.ceil(totalItems / limit),
-        hasPreviousPage: page > 1,
-      },
-    };
   }
 
   /**

@@ -3,7 +3,7 @@ import { IsEnum, IsOptional, IsUUID } from 'class-validator';
 import { OrderStatus, OrderType } from '@prisma/client';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
-export class AdminOrdersQueryDto extends PaginationDto {
+export class OrdersQueryDto extends PaginationDto {
   @IsOptional()
   @IsEnum(OrderStatus)
   @ApiPropertyOptional({ enum: OrderStatus })
@@ -14,6 +14,8 @@ export class AdminOrdersQueryDto extends PaginationDto {
   @ApiPropertyOptional({ enum: OrderType })
   type?: OrderType;
 
+  // Admin only — a cashier's effective storeId is always their own
+  // assigned store and overrides anything passed here.
   @IsOptional()
   @IsUUID()
   @ApiPropertyOptional()
