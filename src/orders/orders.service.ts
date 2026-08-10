@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -16,7 +17,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CreateInStoreOrderDto } from './dto/create-in-store-order.dto';
 import { OrdersQueryDto } from './dto/orders-query.dto';
-import { AdminUpdateOrderDto } from './dto/admin-update-order.dto';
+import { OrderUpdateDto } from './dto/order-update.dto';
 import { DELIVERY_FEE, GUEST_USER_ID } from './orders.constants';
 
 // How far back a cashier can see their own store's order history.
@@ -805,12 +806,47 @@ export class OrdersService {
   }
 
   /**
-   * Get any single order (admin only) — no ownership check, unlike
-   * getOrderById.
+   * Resolve the calling cashier's assigned store, or undefined for an
+   * admin caller (meaning: no store restriction).
    */
-  async adminFindOne(orderId: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+  private async resolveCashierStoreId(caller: {
+    userId: string;
+    role: UserRole;
+  }): Promise<string | undefined> {
+    if (caller.role !== UserRole.CASHIER) {
+      return undefined;
+    }
+
+    const storeCashier = await this.prisma.storeCashier.findUnique({
+      where: { cashierId: caller.userId },
+      select: { storeId: true },
+    });
+
+    if (!storeCashier) {
+      throw new NotFoundException('Cashier is not assigned to a store');
+    }
+
+    return storeCashier.storeId;
+  }
+
+  /**
+   * Get any single order — no customer-ownership check, unlike
+   * getOrderById.
+   *
+   * - ADMIN: any order.
+   * - CASHIER: only orders placed at their own assigned store.
+   */
+  async findOrder(
+    caller: { userId: string; role: UserRole },
+    orderId: string,
+  ) {
+    const storeId = await this.resolveCashierStoreId(caller);
+
+    const order = await this.prisma.order.findFirst({
+      where: {
+        id: orderId,
+        ...(storeId ? { storeId } : {}),
+      },
       include: {
         items: true,
         store: {
@@ -830,45 +866,118 @@ export class OrdersService {
   }
 
   /**
-   * Admin override for status/note/total. Does not run the cashier
-   * status-transition rules, but - like the cashier flow and claiming -
-   * does award points when the status lands on FINISHED. Does not
-   * adjust points already awarded if the total changes.
+   * Update an order.
+   *
+   * - ADMIN: unrestricted override of status/note/total/address/phone/
+   *   items — no status-transition rules — same power as before, plus
+   *   the new fields. Awards points when the status lands on FINISHED.
+   *   Does not adjust points already awarded if the total changes.
+   * - CASHIER: scoped to their own store, cannot touch status or total
+   *   directly, and can only edit while the order isn't FINISHED or
+   *   CANCELLED yet. Changing an item's quantity recalculates that
+   *   item's totalPrice and the order's total (itemsTotal + deliveryFee)
+   *   automatically.
    */
-  async adminUpdate(
+  async updateOrder(
+    caller: { userId: string; role: UserRole },
     orderId: string,
-    dto: AdminUpdateOrderDto,
-    adminId: string,
+    dto: OrderUpdateDto,
   ) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
-      select: { id: true },
-    });
+    const storeId = await this.resolveCashierStoreId(caller);
+    const isCashier = caller.role === UserRole.CASHIER;
 
-    if (!order) {
-      throw new NotFoundException('Order not found');
+    if (isCashier && (dto.status !== undefined || dto.total !== undefined)) {
+      throw new ForbiddenException(
+        'Cashiers cannot change order status or total directly',
+      );
     }
 
-    const updatedOrder = await this.prisma.order.update({
-      where: { id: orderId },
-      data: {
-        ...(dto.status !== undefined ? { status: dto.status } : {}),
-        ...(dto.note !== undefined ? { note: dto.note } : {}),
-        ...(dto.total !== undefined ? { total: dto.total } : {}),
-      },
-      include: {
-        items: true,
-        store: {
-          select: { id: true, name: true },
+    const updatedOrder = await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findFirst({
+        where: {
+          id: orderId,
+          ...(storeId ? { storeId } : {}),
         },
-      },
+        include: {
+          items: true,
+        },
+      });
+
+      if (!order) {
+        throw new NotFoundException('Order not found');
+      }
+
+      if (
+        isCashier &&
+        (order.status === OrderStatus.FINISHED ||
+          order.status === OrderStatus.CANCELLED)
+      ) {
+        throw new BadRequestException(
+          `Cannot edit an order with status ${order.status}`,
+        );
+      }
+
+      let itemsTotal: number | undefined;
+
+      if (dto.items?.length) {
+        const orderItemIds = new Set(order.items.map((item) => item.id));
+
+        for (const itemUpdate of dto.items) {
+          if (!orderItemIds.has(itemUpdate.id)) {
+            throw new BadRequestException(
+              `Item ${itemUpdate.id} does not belong to this order`,
+            );
+          }
+        }
+
+        const quantityById = new Map(
+          dto.items.map((item) => [item.id, item.quantity]),
+        );
+
+        itemsTotal = 0;
+
+        for (const item of order.items) {
+          const quantity = quantityById.get(item.id) ?? item.quantity;
+          const totalPrice = Number(item.unitPrice) * quantity;
+
+          itemsTotal += totalPrice;
+
+          if (quantityById.has(item.id)) {
+            await tx.orderItem.update({
+              where: { id: item.id },
+              data: { quantity, totalPrice },
+            });
+          }
+        }
+      }
+
+      return tx.order.update({
+        where: { id: order.id },
+        data: {
+          ...(dto.status !== undefined ? { status: dto.status } : {}),
+          ...(dto.note !== undefined ? { note: dto.note } : {}),
+          ...(dto.address !== undefined ? { address: dto.address } : {}),
+          ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
+          ...(itemsTotal !== undefined
+            ? { total: itemsTotal + Number(order.deliveryFee) }
+            : dto.total !== undefined
+              ? { total: dto.total }
+              : {}),
+        },
+        include: {
+          items: true,
+          store: {
+            select: { id: true, name: true },
+          },
+        },
+      });
     });
 
     if (dto.status === OrderStatus.FINISHED) {
       await this.awardOrderPoints({
         orderId: updatedOrder.id,
         userId: updatedOrder.userId,
-        createdBy: adminId,
+        createdBy: caller.userId,
         purchaseAmount:
           Number(updatedOrder.total) - Number(updatedOrder.deliveryFee),
       });
