@@ -367,6 +367,7 @@ enum OrderStatus {
   CONFIRMED
   IN_PROGRESS
   FINISHED
+  CANCELLED
 }
 
 enum OrderType {

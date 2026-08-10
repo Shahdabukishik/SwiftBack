@@ -545,6 +545,8 @@ export class OrdersService {
       [OrderStatus.IN_PROGRESS]: [OrderStatus.FINISHED],
 
       [OrderStatus.FINISHED]: [],
+
+      [OrderStatus.CANCELLED]: [],
     };
 
     const isAllowed = allowedTransitions[order.status].includes(dto.status);
@@ -596,6 +598,51 @@ export class OrdersService {
     }
 
     return updatedOrder;
+  }
+
+  /**
+   * Cancel the authenticated user's own order.
+   *
+   * Only allowed while the order is still CONFIRMED — once a cashier
+   * has started on it (IN_PROGRESS) or it's done, the customer can no
+   * longer back out.
+   */
+  async cancelOrder(orderId: string, userId: string) {
+    const order = await this.prisma.order.findFirst({
+      where: {
+        id: orderId,
+        userId,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (order.status !== OrderStatus.CONFIRMED) {
+      throw new BadRequestException(
+        `Cannot cancel an order with status ${order.status}`,
+      );
+    }
+
+    return this.prisma.order.update({
+      where: {
+        id: orderId,
+      },
+      data: {
+        status: OrderStatus.CANCELLED,
+      },
+      include: {
+        items: true,
+        store: {
+          select: {
+            id: true,
+            name: true,
+            address: true,
+          },
+        },
+      },
+    });
   }
 
   /**
