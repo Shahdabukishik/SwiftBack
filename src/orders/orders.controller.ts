@@ -21,7 +21,6 @@ import { OrdersService } from './orders.service';
 import { UserRole } from '../users/enums/user-role.enum';
 
 import { CreateOrderDto } from './dto/create-order.dto';
-import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CreateInStoreOrderDto } from './dto/create-in-store-order.dto';
 import { OrdersQueryDto } from './dto/orders-query.dto';
 import { OrderUpdateDto } from './dto/order-update.dto';
@@ -126,11 +125,14 @@ export class OrdersController {
   }
 
   /**
-   * Edit an order.
+   * Edit an order — including changing its status (e.g. to advance it or
+   * to cancel it).
    *
    * - ADMIN: status/note/total/address/phone/items, no restrictions.
-   * - CASHIER: note/address/phone/items only (no status or total), own
-   *   store only, and only while the order isn't FINISHED or CANCELLED.
+   * - CASHIER: note/address/phone/items/status (no total), own store
+   *   only, status unrestricted like admin — but since edits are
+   *   blocked once the order is already FINISHED or CANCELLED, a
+   *   cashier can only cancel from PENDING, CONFIRMED, or IN_PROGRESS.
    *
    * PATCH /orders/manage/:id
    */
@@ -138,7 +140,7 @@ export class OrdersController {
   @Patch('/manage/:id')
   @ApiOperation({
     summary:
-      'Edit an order (admin: unrestricted; cashier: limited fields, own store)',
+      'Edit an order, incl. status (admin: unrestricted; cashier: own store, no total)',
   })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN, UserRole.CASHIER)
@@ -240,30 +242,5 @@ export class OrdersController {
     dto: CreateInStoreOrderDto,
   ) {
     return this.ordersService.createInStoreOrder(req.user.userId, dto);
-  }
-
-  /**
-   * Update order status.
-   *
-   * Allowed:
-   *
-   * CONFIRMED -> IN_PROGRESS
-   * IN_PROGRESS -> FINISHED
-   *
-   * PATCH /cashier/orders/:id/status
-   */
-  @Version('1')
-  @ApiOperation({ summary: 'Update order status' })
-  @Patch('/:id/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.CASHIER)
-  async updateOrderStatus(
-    @Req() req: any,
-    @Param('id')
-    orderId: string,
-    @Body()
-    dto: UpdateOrderStatusDto,
-  ) {
-    return this.ordersService.updateOrderStatus(orderId, req.user.userId, dto);
   }
 }
