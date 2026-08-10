@@ -14,6 +14,7 @@ import {
 
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorator/roles.decorator';
 import { OrdersService } from './orders.service';
@@ -43,6 +44,7 @@ export class OrdersController {
    */
   @Version('1')
   @Post()
+  @UseGuards(OptionalJwtAuthGuard)
   async createOrder(
     @Req() req: any,
     @Body()
