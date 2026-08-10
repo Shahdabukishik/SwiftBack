@@ -178,6 +178,23 @@ export class OrdersController {
   }
 
   /**
+   * Cancel own order while it's still CONFIRMED.
+   *
+   * PATCH /orders/:id/cancel
+   */
+  @Version('1')
+  @Patch('/:id/cancel')
+  @ApiOperation({ summary: 'Cancel own order' })
+  @UseGuards(JwtAuthGuard)
+  async cancelOrder(
+    @Req() req: any,
+    @Param('id')
+    orderId: string,
+  ) {
+    return this.ordersService.cancelOrder(orderId, req.user.userId);
+  }
+
+  /**
    * Claim a guest order after registering/logging in.
    *
    * POST /orders/:id/claim
