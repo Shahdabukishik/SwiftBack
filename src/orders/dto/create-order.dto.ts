@@ -10,12 +10,9 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
-import { CreateOrderItemDto } from './order-item.dto';
 import { OrderType } from '@prisma/client';
-
-// Customers/guests can only self-serve PICKUP or DELIVERY. IN_STORE orders
-// are entered by a cashier through a separate endpoint, never here.
-const CUSTOMER_ORDER_TYPES = [OrderType.PICKUP, OrderType.DELIVERY] as const;
+import { CreateOrderItemDto } from './order-item.dto';
+import { CUSTOMER_ORDER_TYPES } from '../orders.constants';
 
 export class CreateOrderDto {
   @IsUUID()

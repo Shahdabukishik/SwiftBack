@@ -744,18 +744,22 @@ export class OrdersService {
    * Update an order.
    *
    * - ADMIN: unrestricted override of status/note/total/address/phone/
-   *   items — no status-transition rules. Awards points when the status
-   *   lands on FINISHED. Does not adjust points already awarded if the
-   *   total changes.
+   *   type/items — no status-transition rules. Awards points when the
+   *   status lands on FINISHED. Does not adjust points already awarded
+   *   if the total changes.
    * - CASHIER: scoped to their own store, cannot touch total directly,
    *   and can only edit (including status, e.g. to cancel) while the
    *   order isn't FINISHED or CANCELLED yet — same as admin, status is
    *   unrestricted (no transition rules), but the FINISHED/CANCELLED
    *   edit-lock means a cashier can only reach CANCELLED from PENDING,
    *   CONFIRMED, or IN_PROGRESS. Also awards points when the status
-   *   lands on FINISHED. Changing an item's quantity recalculates that
-   *   item's totalPrice and the order's total (itemsTotal + deliveryFee)
-   *   automatically.
+   *   lands on FINISHED.
+   *
+   * Changing an item's quantity recalculates that item's totalPrice and
+   * the order's total automatically. Switching `type` between PICKUP and
+   * DELIVERY recalculates deliveryFee (and total) too: switching to
+   * DELIVERY requires an address (sent alongside, or already on the
+   * order) and switching to PICKUP clears any address.
    */
   async updateOrder(
     caller: { userId: string; role: UserRole },
@@ -830,15 +834,53 @@ export class OrdersService {
         }
       }
 
+      // Switching type between PICKUP/DELIVERY changes deliveryFee, and
+      // requires (or clears) address to match.
+      let deliveryFee: number | undefined;
+      let resolvedAddress: string | null | undefined;
+
+      if (dto.type !== undefined) {
+        deliveryFee = dto.type === OrderType.DELIVERY ? DELIVERY_FEE : 0;
+
+        if (dto.type === OrderType.DELIVERY) {
+          resolvedAddress =
+            dto.address !== undefined ? dto.address : order.address;
+
+          if (!resolvedAddress) {
+            throw new BadRequestException(
+              'Address is required when switching an order to DELIVERY',
+            );
+          }
+        } else {
+          resolvedAddress = null;
+        }
+      } else if (dto.address !== undefined) {
+        resolvedAddress = dto.address;
+      }
+
+      const recalculateTotal =
+        itemsTotal !== undefined || deliveryFee !== undefined;
+
       return tx.order.update({
         where: { id: order.id },
         data: {
           ...(dto.status !== undefined ? { status: dto.status } : {}),
           ...(dto.note !== undefined ? { note: dto.note } : {}),
-          ...(dto.address !== undefined ? { address: dto.address } : {}),
+          ...(dto.type !== undefined ? { type: dto.type } : {}),
+          ...(resolvedAddress !== undefined
+            ? { address: resolvedAddress }
+            : {}),
           ...(dto.phone !== undefined ? { phone: dto.phone } : {}),
-          ...(itemsTotal !== undefined
-            ? { total: itemsTotal + Number(order.deliveryFee) }
+          ...(deliveryFee !== undefined ? { deliveryFee } : {}),
+          ...(recalculateTotal
+            ? {
+                total:
+                  (itemsTotal ??
+                    order.items.reduce(
+                      (sum, item) => sum + Number(item.totalPrice),
+                      0,
+                    )) + (deliveryFee ?? Number(order.deliveryFee)),
+              }
             : dto.total !== undefined
               ? { total: dto.total }
               : {}),

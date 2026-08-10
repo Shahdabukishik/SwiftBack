@@ -126,13 +126,17 @@ export class OrdersController {
 
   /**
    * Edit an order — including changing its status (e.g. to advance it or
-   * to cancel it).
+   * to cancel it) or switching it between PICKUP and DELIVERY.
    *
-   * - ADMIN: status/note/total/address/phone/items, no restrictions.
-   * - CASHIER: note/address/phone/items/status (no total), own store
-   *   only, status unrestricted like admin — but since edits are
+   * - ADMIN: status/note/total/address/phone/type/items, no restrictions.
+   * - CASHIER: note/address/phone/type/items/status (no total), own
+   *   store only, status unrestricted like admin — but since edits are
    *   blocked once the order is already FINISHED or CANCELLED, a
    *   cashier can only cancel from PENDING, CONFIRMED, or IN_PROGRESS.
+   *
+   * Switching `type` to DELIVERY requires an address (sent alongside, or
+   * already on the order); switching to PICKUP clears any address. Both
+   * directions recalculate deliveryFee and total automatically.
    *
    * PATCH /orders/manage/:id
    */
