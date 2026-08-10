@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -14,6 +15,7 @@ import {
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderStatus } from '@prisma/client';
+import { CUSTOMER_ORDER_TYPES } from '../orders.constants';
 
 export class OrderItemQuantityUpdateDto {
   @IsUUID()
@@ -48,6 +50,14 @@ export class OrderUpdateDto {
   @IsPositive()
   @ApiPropertyOptional()
   total?: number;
+
+  // Switching to DELIVERY requires an address (either sent alongside this,
+  // or already on the order). Switching to PICKUP clears any address.
+  // Recalculates deliveryFee and total automatically.
+  @IsOptional()
+  @IsIn(CUSTOMER_ORDER_TYPES)
+  @ApiPropertyOptional({ enum: CUSTOMER_ORDER_TYPES })
+  type?: (typeof CUSTOMER_ORDER_TYPES)[number];
 
   @IsOptional()
   @IsString()
