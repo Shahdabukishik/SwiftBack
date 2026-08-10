@@ -59,6 +59,7 @@ export class OrdersController {
    *
    * GET /orders/my
    */
+  @Version('1')
   @Get('my')
   @UseGuards(JwtAuthGuard)
   async getMyOrders(@Req() req: any) {
@@ -162,6 +163,7 @@ export class OrdersController {
    *
    * GET /orders/:id
    */
+  @Version('1')
   @Get(':id')
   @UseGuards(JwtAuthGuard)
   async getOrderById(
