@@ -150,6 +150,8 @@ export class OrdersService {
           unitPrice: menuItem.price,
 
           totalPrice,
+
+          note: item.note ?? null,
         };
       });
 
