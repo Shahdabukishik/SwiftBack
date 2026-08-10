@@ -105,10 +105,10 @@ export class OrdersController {
    * - ADMIN: any order.
    * - CASHIER: only orders placed at their own assigned store.
    *
-   * GET /orders/admin/:id
+   * GET /orders/manage/:id
    */
   @Version('1')
-  @Get('/admin/:id')
+  @Get('/manage/:id')
   @ApiOperation({
     summary: 'Get any order (admin: any store; cashier: own store)',
   })
@@ -132,10 +132,10 @@ export class OrdersController {
    * - CASHIER: note/address/phone/items only (no status or total), own
    *   store only, and only while the order isn't FINISHED or CANCELLED.
    *
-   * PATCH /orders/admin/:id
+   * PATCH /orders/manage/:id
    */
   @Version('1')
-  @Patch('/admin/:id')
+  @Patch('/manage/:id')
   @ApiOperation({
     summary:
       'Edit an order (admin: unrestricted; cashier: limited fields, own store)',
@@ -159,14 +159,14 @@ export class OrdersController {
   /**
    * Delete an order (admin only).
    *
-   * DELETE /orders/admin/:id
+   * DELETE /orders/manage/:id
    */
   @Version('1')
-  @Delete('/admin/:id')
+  @Delete('/manage/:id')
   @ApiOperation({ summary: 'Delete an order (admin)' })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  async adminDelete(
+  async deleteOrder(
     @Param('id')
     orderId: string,
   ) {
