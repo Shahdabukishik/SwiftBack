@@ -387,6 +387,9 @@ model Order {
   phone    String
   note     String?
 
+  address     String?
+  deliveryFee Decimal @db.Decimal(10, 2) @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

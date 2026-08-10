@@ -16,7 +16,7 @@ import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CreateInStoreOrderDto } from './dto/create-in-store-order.dto';
 import { AdminOrdersQueryDto } from './dto/admin-orders-query.dto';
 import { AdminUpdateOrderDto } from './dto/admin-update-order.dto';
-import { GUEST_USER_ID } from './orders.constants';
+import { DELIVERY_FEE, GUEST_USER_ID } from './orders.constants';
 
 @Injectable()
 export class OrdersService {
@@ -41,7 +41,7 @@ export class OrdersService {
    * after a successful commit, with CONFIRMED status.
    */
   async createOrder(userId: string | null, createOrderDto: CreateOrderDto) {
-    const { storeId, items, type, phone } = createOrderDto;
+    const { storeId, items, type, phone, address } = createOrderDto;
 
     // Guests share one fixed placeholder user row instead of a NULL userId.
     const resolvedUserId = userId ?? GUEST_USER_ID;
@@ -122,7 +122,7 @@ export class OrdersService {
 
       const menuItemsMap = new Map(menuItems.map((item) => [item.id, item]));
 
-      let total = 0;
+      let itemsTotal = 0;
 
       const orderItems = items.map((item) => {
         const menuItem = menuItemsMap.get(item.menuItemId);
@@ -137,7 +137,7 @@ export class OrdersService {
 
         const totalPrice = unitPrice * item.quantity;
 
-        total += totalPrice;
+        itemsTotal += totalPrice;
 
         return {
           menuItemId: menuItem.id,
@@ -159,6 +159,8 @@ export class OrdersService {
       // This state is temporary and exists only
       // during the transaction.
 
+      const deliveryFee = type === OrderType.DELIVERY ? DELIVERY_FEE : 0;
+
       const order = await tx.order.create({
         data: {
           userId: resolvedUserId,
@@ -167,8 +169,10 @@ export class OrdersService {
           status: OrderStatus.PENDING,
 
           type,
-          total,
+          total: itemsTotal + deliveryFee,
+          deliveryFee,
           phone,
+          ...(type === OrderType.DELIVERY ? { address } : {}),
 
           items: {
             create: orderItems,
@@ -593,7 +597,8 @@ export class OrdersService {
         orderId: updatedOrder.id,
         userId: updatedOrder.userId,
         createdBy: cashierId,
-        purchaseAmount: Number(updatedOrder.total),
+        purchaseAmount:
+          Number(updatedOrder.total) - Number(updatedOrder.deliveryFee),
       });
     }
 
@@ -713,7 +718,8 @@ export class OrdersService {
         orderId: claimedOrder.id,
         userId: claimedOrder.userId,
         createdBy: userId,
-        purchaseAmount: Number(claimedOrder.total),
+        purchaseAmount:
+          Number(claimedOrder.total) - Number(claimedOrder.deliveryFee),
         storeOverride: {
           storeId: order.store.id,
           storeName: order.store.name,
@@ -891,7 +897,8 @@ export class OrdersService {
         orderId: updatedOrder.id,
         userId: updatedOrder.userId,
         createdBy: adminId,
-        purchaseAmount: Number(updatedOrder.total),
+        purchaseAmount:
+          Number(updatedOrder.total) - Number(updatedOrder.deliveryFee),
       });
     }
 
