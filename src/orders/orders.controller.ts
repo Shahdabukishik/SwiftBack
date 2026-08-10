@@ -24,7 +24,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CreateInStoreOrderDto } from './dto/create-in-store-order.dto';
 import { OrdersQueryDto } from './dto/orders-query.dto';
-import { AdminUpdateOrderDto } from './dto/admin-update-order.dto';
+import { OrderUpdateDto } from './dto/order-update.dto';
 
 @ApiTags('Orders')
 @ApiBearerAuth()
@@ -100,40 +100,60 @@ export class OrdersController {
   }
 
   /**
-   * Get any single order (admin only, no ownership check).
+   * Get any single order, no customer-ownership check.
+   *
+   * - ADMIN: any order.
+   * - CASHIER: only orders placed at their own assigned store.
    *
    * GET /orders/admin/:id
    */
   @Version('1')
   @Get('/admin/:id')
-  @ApiOperation({ summary: 'Get any order (admin)' })
+  @ApiOperation({
+    summary: 'Get any order (admin: any store; cashier: own store)',
+  })
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  async adminFindOne(
+  @Roles(UserRole.ADMIN, UserRole.CASHIER)
+  async findOrder(
+    @Req() req: any,
     @Param('id')
     orderId: string,
   ) {
-    return this.ordersService.adminFindOne(orderId);
+    return this.ordersService.findOrder(
+      { userId: req.user.userId, role: req.user.role },
+      orderId,
+    );
   }
 
   /**
-   * Edit an order's status, note, or total (admin only).
+   * Edit an order.
+   *
+   * - ADMIN: status/note/total/address/phone/items, no restrictions.
+   * - CASHIER: note/address/phone/items only (no status or total), own
+   *   store only, and only while the order isn't FINISHED or CANCELLED.
    *
    * PATCH /orders/admin/:id
    */
   @Version('1')
   @Patch('/admin/:id')
-  @ApiOperation({ summary: 'Edit an order (admin)' })
+  @ApiOperation({
+    summary:
+      'Edit an order (admin: unrestricted; cashier: limited fields, own store)',
+  })
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  async adminUpdate(
+  @Roles(UserRole.ADMIN, UserRole.CASHIER)
+  async updateOrder(
     @Req() req: any,
     @Param('id')
     orderId: string,
     @Body()
-    dto: AdminUpdateOrderDto,
+    dto: OrderUpdateDto,
   ) {
-    return this.ordersService.adminUpdate(orderId, dto, req.user.userId);
+    return this.ordersService.updateOrder(
+      { userId: req.user.userId, role: req.user.role },
+      orderId,
+      dto,
+    );
   }
 
   /**
