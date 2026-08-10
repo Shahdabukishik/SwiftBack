@@ -23,7 +23,7 @@ import { UserRole } from '../users/enums/user-role.enum';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CreateInStoreOrderDto } from './dto/create-in-store-order.dto';
-import { AdminOrdersQueryDto } from './dto/admin-orders-query.dto';
+import { OrdersQueryDto } from './dto/orders-query.dto';
 import { AdminUpdateOrderDto } from './dto/admin-update-order.dto';
 
 @ApiTags('Orders')
@@ -69,41 +69,34 @@ export class OrdersController {
   }
 
   /**
-   * Get today's orders
-   * for cashier's assigned store.
+   * List orders, paginated and optionally filtered by status/type/store.
    *
-   * GET /cashier/orders
+   * - ADMIN: sees every store, no date restriction.
+   * - CASHIER: always scoped to their own assigned store, capped to the
+   *   last 3 days — any storeId they pass is ignored.
+   *
+   * GET /orders
    *
    * Registered before GET ':id' on purpose: ':id' is a catch-all path
-   * segment, so if it came first it would swallow this literal route
-   * (a request to /orders/today would be treated as id="today").
+   * segment, so if it came first it would swallow this literal route.
+   * (A base-path GET has no extra segment though, so this is actually
+   * safe either way — kept here for readability alongside the other
+   * literal routes.)
    */
   @Version('1')
-  @Get('/today')
-  @ApiOperation({ summary: 'Get today orders for cashier' })
+  @Get()
+  @ApiOperation({ summary: 'List orders (cashier: own store; admin: all)' })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.CASHIER, UserRole.ADMIN)
-  async getCashierOrders(@Req() req: any) {
-    return this.ordersService.getCashierOrders(req.user.userId);
-  }
-
-  /**
-   * List every order in the system (admin only), paginated.
-   *
-   * GET /orders/admin
-   *
-   * Registered before GET ':id' — same catch-all reasoning as /today.
-   */
-  @Version('1')
-  @Get('/admin')
-  @ApiOperation({ summary: 'List all orders (admin)' })
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN)
-  async adminFindAll(
+  async findOrders(
+    @Req() req: any,
     @Query()
-    query: AdminOrdersQueryDto,
+    query: OrdersQueryDto,
   ) {
-    return this.ordersService.adminFindAll(query);
+    return this.ordersService.findOrders(
+      { userId: req.user.userId, role: req.user.role },
+      query,
+    );
   }
 
   /**
