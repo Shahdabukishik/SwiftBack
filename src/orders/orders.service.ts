@@ -322,6 +322,7 @@ export class OrdersService {
 
   /**
    * List orders, paginated and optionally filtered by status/type/store.
+   * status and type each accept one or more values (matched with `in`).
    *
    * - ADMIN: sees every store, no date restriction, storeId filter optional.
    * - CASHIER: always scoped to their own assigned store, and capped to the
@@ -364,8 +365,8 @@ export class OrdersService {
     }
 
     const where: Prisma.OrderWhereInput = {
-      ...(status ? { status } : {}),
-      ...(type ? { type } : {}),
+      ...(status?.length ? { status: { in: status } } : {}),
+      ...(type?.length ? { type: { in: type } } : {}),
       ...(effectiveStoreId ? { storeId: effectiveStoreId } : {}),
       ...(createdAt ? { createdAt } : {}),
     };
