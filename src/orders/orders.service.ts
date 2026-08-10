@@ -14,7 +14,6 @@ import { PointsEngineService } from '../points-engine/points-engine.service';
 import { UserRole } from '../users/enums/user-role.enum';
 
 import { CreateOrderDto } from './dto/create-order.dto';
-import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { CreateInStoreOrderDto } from './dto/create-in-store-order.dto';
 import { OrdersQueryDto } from './dto/orders-query.dto';
 import { OrderUpdateDto } from './dto/order-update.dto';
@@ -358,9 +357,7 @@ export class OrdersService {
 
       const historyStart = new Date();
 
-      historyStart.setDate(
-        historyStart.getDate() - (CASHIER_HISTORY_DAYS - 1),
-      );
+      historyStart.setDate(historyStart.getDate() - (CASHIER_HISTORY_DAYS - 1));
       historyStart.setHours(0, 0, 0, 0);
 
       createdAt = { gte: historyStart };
@@ -506,125 +503,6 @@ export class OrdersService {
     });
 
     return order;
-  }
-
-  /**
-   * Update order status by cashier.
-   *
-   * Allowed transitions:
-   *
-   * CONFIRMED -> IN_PROGRESS
-   * IN_PROGRESS -> FINISHED
-   *
-   * PENDING is not a cashier-managed state.
-   * It is only a temporary internal state during
-   * order creation.
-   */
-  async updateOrderStatus(
-    orderId: string,
-    cashierId: string,
-    dto: UpdateOrderStatusDto,
-  ) {
-    // --------------------------------------------------
-    // 1. Get Cashier Store Assignment
-    // --------------------------------------------------
-
-    const storeCashier = await this.prisma.storeCashier.findUnique({
-      where: {
-        cashierId,
-      },
-
-      select: {
-        storeId: true,
-      },
-    });
-
-    if (!storeCashier) {
-      throw new NotFoundException('Cashier is not assigned to a store');
-    }
-
-    // --------------------------------------------------
-    // 2. Find Order in Cashier's Store
-    // --------------------------------------------------
-
-    const order = await this.prisma.order.findFirst({
-      where: {
-        id: orderId,
-
-        storeId: storeCashier.storeId,
-      },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
-    // --------------------------------------------------
-    // 3. Validate Status Transition
-    // --------------------------------------------------
-
-    const allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
-      [OrderStatus.PENDING]: [],
-
-      [OrderStatus.CONFIRMED]: [OrderStatus.IN_PROGRESS],
-
-      [OrderStatus.IN_PROGRESS]: [OrderStatus.FINISHED],
-
-      [OrderStatus.FINISHED]: [],
-
-      [OrderStatus.CANCELLED]: [],
-    };
-
-    const isAllowed = allowedTransitions[order.status].includes(dto.status);
-
-    if (!isAllowed) {
-      throw new BadRequestException(
-        `Cannot change order status from ${order.status} to ${dto.status}`,
-      );
-    }
-
-    // --------------------------------------------------
-    // 4. Update Status
-    // --------------------------------------------------
-
-    const updatedOrder = await this.prisma.order.update({
-      where: {
-        id: order.id,
-      },
-
-      data: {
-        status: dto.status,
-      },
-
-      include: {
-        items: true,
-
-        store: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
-
-    // --------------------------------------------------
-    // 5. Award Loyalty Points
-    // --------------------------------------------------
-    // Only when the order just became FINISHED, and only for real
-    // customers — guest orders earn nothing until claimed.
-
-    if (dto.status === OrderStatus.FINISHED) {
-      await this.awardOrderPoints({
-        orderId: updatedOrder.id,
-        userId: updatedOrder.userId,
-        createdBy: cashierId,
-        purchaseAmount:
-          Number(updatedOrder.total) - Number(updatedOrder.deliveryFee),
-      });
-    }
-
-    return updatedOrder;
   }
 
   /**
@@ -836,10 +714,7 @@ export class OrdersService {
    * - ADMIN: any order.
    * - CASHIER: only orders placed at their own assigned store.
    */
-  async findOrder(
-    caller: { userId: string; role: UserRole },
-    orderId: string,
-  ) {
+  async findOrder(caller: { userId: string; role: UserRole }, orderId: string) {
     const storeId = await this.resolveCashierStoreId(caller);
 
     const order = await this.prisma.order.findFirst({
@@ -869,12 +744,16 @@ export class OrdersService {
    * Update an order.
    *
    * - ADMIN: unrestricted override of status/note/total/address/phone/
-   *   items — no status-transition rules — same power as before, plus
-   *   the new fields. Awards points when the status lands on FINISHED.
-   *   Does not adjust points already awarded if the total changes.
-   * - CASHIER: scoped to their own store, cannot touch status or total
-   *   directly, and can only edit while the order isn't FINISHED or
-   *   CANCELLED yet. Changing an item's quantity recalculates that
+   *   items — no status-transition rules. Awards points when the status
+   *   lands on FINISHED. Does not adjust points already awarded if the
+   *   total changes.
+   * - CASHIER: scoped to their own store, cannot touch total directly,
+   *   and can only edit (including status, e.g. to cancel) while the
+   *   order isn't FINISHED or CANCELLED yet — same as admin, status is
+   *   unrestricted (no transition rules), but the FINISHED/CANCELLED
+   *   edit-lock means a cashier can only reach CANCELLED from PENDING,
+   *   CONFIRMED, or IN_PROGRESS. Also awards points when the status
+   *   lands on FINISHED. Changing an item's quantity recalculates that
    *   item's totalPrice and the order's total (itemsTotal + deliveryFee)
    *   automatically.
    */
@@ -886,9 +765,9 @@ export class OrdersService {
     const storeId = await this.resolveCashierStoreId(caller);
     const isCashier = caller.role === UserRole.CASHIER;
 
-    if (isCashier && (dto.status !== undefined || dto.total !== undefined)) {
+    if (isCashier && dto.total !== undefined) {
       throw new ForbiddenException(
-        'Cashiers cannot change order status or total directly',
+        'Cashiers cannot change order total directly',
       );
     }
 
