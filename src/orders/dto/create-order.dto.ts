@@ -2,8 +2,10 @@ import {
   ArrayMinSize,
   IsArray,
   IsIn,
+  IsNotEmpty,
   IsString,
   IsUUID,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -27,6 +29,16 @@ export class CreateOrderDto {
   @IsString()
   @ApiProperty({ example: '0599999999' })
   phone!: string;
+
+  @ValidateIf((o) => o.type === OrderType.DELIVERY)
+  @IsString()
+  @IsNotEmpty()
+  @ApiProperty({
+    example: '123 Main St, Apt 4',
+    required: false,
+    description: 'Required when type is DELIVERY',
+  })
+  address?: string;
 
   @ApiProperty({
     example: [
