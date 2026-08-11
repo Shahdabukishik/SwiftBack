@@ -324,20 +324,23 @@ export class OrdersService {
    * List orders, paginated and optionally filtered by status/type/store.
    * status and type each accept one or more values (matched with `in`).
    *
-   * - ADMIN: sees every store, no date restriction, storeId filter optional.
+   * - ADMIN: sees every store, storeId filter optional, and `from`/`to`
+   *   (YYYY-MM-DD, inclusive) optionally narrow by createdAt date.
    * - CASHIER: always scoped to their own assigned store, and capped to the
-   *   last CASHIER_HISTORY_DAYS days — any storeId they pass is ignored.
+   *   last CASHIER_HISTORY_DAYS days — any storeId they pass is ignored,
+   *   and any `from` they pass can only narrow that cap further, never
+   *   extend past it.
    */
   async findOrders(
     caller: { userId: string; role: UserRole },
     query: OrdersQueryDto,
   ) {
-    const { page, limit, status, type, storeId } = query;
+    const { page, limit, status, type, storeId, from, to } = query;
 
     const skip = (page - 1) * limit;
 
     let effectiveStoreId = storeId;
-    let createdAt: Prisma.OrderWhereInput['createdAt'];
+    let historyStart: Date | undefined;
 
     if (caller.role === UserRole.CASHIER) {
       const storeCashier = await this.prisma.storeCashier.findUnique({
@@ -356,13 +359,40 @@ export class OrdersService {
 
       effectiveStoreId = storeCashier.storeId;
 
-      const historyStart = new Date();
+      historyStart = new Date();
 
       historyStart.setDate(historyStart.getDate() - (CASHIER_HISTORY_DAYS - 1));
       historyStart.setHours(0, 0, 0, 0);
-
-      createdAt = { gte: historyStart };
     }
+
+    let gte: Date | undefined;
+
+    if (from) {
+      gte = new Date(from);
+      gte.setHours(0, 0, 0, 0);
+    }
+
+    // A cashier's history cap is a hard ceiling: their own `from` can only
+    // narrow it further, never extend past it.
+    if (historyStart && (!gte || gte < historyStart)) {
+      gte = historyStart;
+    }
+
+    let lte: Date | undefined;
+
+    if (to) {
+      lte = new Date(to);
+      lte.setHours(23, 59, 59, 999);
+    }
+
+    if (gte && lte && gte > lte) {
+      throw new BadRequestException('`from` date must be before `to` date');
+    }
+
+    const createdAt: Prisma.OrderWhereInput['createdAt'] =
+      gte || lte
+        ? { ...(gte ? { gte } : {}), ...(lte ? { lte } : {}) }
+        : undefined;
 
     const where: Prisma.OrderWhereInput = {
       ...(status?.length ? { status: { in: status } } : {}),

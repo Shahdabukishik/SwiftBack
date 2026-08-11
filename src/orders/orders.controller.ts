@@ -68,11 +68,13 @@ export class OrdersController {
   }
 
   /**
-   * List orders, paginated and optionally filtered by status/type/store.
+   * List orders, paginated and optionally filtered by status/type/store/
+   * date range (from/to, YYYY-MM-DD, inclusive).
    *
-   * - ADMIN: sees every store, no date restriction.
+   * - ADMIN: sees every store, no date restriction unless from/to is sent.
    * - CASHIER: always scoped to their own assigned store, capped to the
-   *   last 3 days — any storeId they pass is ignored.
+   *   last 3 days — any storeId they pass is ignored, and any `from` they
+   *   pass can only narrow that cap further.
    *
    * GET /orders
    *
