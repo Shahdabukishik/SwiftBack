@@ -90,6 +90,7 @@ export class PointsTransactionsService {
             quantity: true,
             pointsPerItem: true,
             totalPoints: true,
+            itemName: true,
             reward: {
               select: {
                 menuItem: {
@@ -134,7 +135,12 @@ export class PointsTransactionsService {
         quantity: item.quantity,
         pointsPerItem: Number(item.pointsPerItem),
         totalPoints: Number(item.totalPoints),
-        menuItem: item.reward.menuItem,
+        menuItem: {
+          id: item.reward?.menuItem.id ?? null,
+          name: item.itemName,
+          description: item.reward?.menuItem.description ?? null,
+          images: item.reward?.menuItem.images ?? [],
+        },
       })),
     };
   }
