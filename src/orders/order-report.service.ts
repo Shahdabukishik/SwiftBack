@@ -2,11 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { join } from 'path';
 import PDFDocument from 'pdfkit';
 import { OrdersService } from './orders.service';
-import {
-  renderBidiLineCenter,
-  renderBidiLineRight,
-  toDisplayString,
-} from './bidi-text.util';
+import { renderBidiLineCenter, renderBidiLineRight } from './bidi-text.util';
 
 type OrderForReport = Awaited<ReturnType<OrdersService['findOrder']>>;
 
@@ -34,10 +30,34 @@ const ORDER_STATUS_LABELS: Record<string, string> = {
   CANCELLED: 'ملغي',
 };
 
+// Narrow receipt ticket sized for an 80mm thermal/POS printer, not a full
+// A4 sheet. The needed height depends on item count and isn't known up
+// front, so generatePdf() renders once on a tall scratch page purely to
+// measure the content height, then renders again on a page created at
+// exactly that height.
+const RECEIPT_WIDTH = 227; // 80mm
+const RECEIPT_MAX_HEIGHT = 3000;
+const MARGIN = 14;
+
 @Injectable()
 export class OrderReportService {
   generatePdf(order: OrderForReport): Promise<Buffer> {
-    const doc = new PDFDocument({ size: 'A4', margin: 50 });
+    const measureDoc = new PDFDocument({
+      size: [RECEIPT_WIDTH, RECEIPT_MAX_HEIGHT],
+      margin: MARGIN,
+    });
+    measureDoc.on('data', () => {});
+    measureDoc.on('error', () => {});
+    measureDoc.registerFont('Cairo', CAIRO_FONT_PATH);
+    measureDoc.font('Cairo').fillColor(TEXT);
+    this.renderContent(measureDoc, order);
+    const contentHeight = Math.min(measureDoc.y + MARGIN, RECEIPT_MAX_HEIGHT);
+    measureDoc.end();
+
+    const doc = new PDFDocument({
+      size: [RECEIPT_WIDTH, contentHeight],
+      margin: MARGIN,
+    });
     const chunks: Buffer[] = [];
 
     const done = new Promise<Buffer>((resolve, reject) => {
@@ -48,204 +68,157 @@ export class OrderReportService {
 
     doc.registerFont('Cairo', CAIRO_FONT_PATH);
     doc.font('Cairo').fillColor(TEXT);
+    this.renderContent(doc, order);
+    doc.end();
 
-    const marginX = 50;
-    const pageRight = doc.page.width - marginX;
-    const contentWidth = doc.page.width - marginX * 2;
+    return done;
+  }
 
-    // Header (mirrored for RTL): logo + store name/address on the right,
-    // order number + status on the left.
-    const headerTop = doc.y;
-    const infoZoneWidth = 140;
-    const logoWidth = 44;
+  private renderContent(doc: PDFKit.PDFDocument, order: OrderForReport): void {
+    const pageRight = doc.page.width - MARGIN;
+    const contentWidth = doc.page.width - MARGIN * 2;
+    const centerX = MARGIN + contentWidth / 2;
 
-    doc.image(LOGO_PATH, pageRight - logoWidth, headerTop, {
-      width: logoWidth,
-    });
+    const divider = (dashed = true) => {
+      doc.moveDown(0.5);
+      if (dashed) doc.dash(2, { space: 2 });
+      doc
+        .moveTo(MARGIN, doc.y)
+        .lineTo(pageRight, doc.y)
+        .strokeColor(BORDER)
+        .lineWidth(1)
+        .stroke();
+      if (dashed) doc.undash();
+      doc.moveDown(0.5);
+    };
 
-    doc.fillColor(ORANGE).fontSize(18);
-    renderBidiLineRight(
-      doc,
-      order.store.name,
-      pageRight - logoWidth - 10,
-      headerTop,
-    );
-    doc.fillColor(GRAY).fontSize(9);
-    renderBidiLineRight(
-      doc,
-      order.store.address,
-      pageRight - logoWidth - 10,
-      doc.y,
-    );
-
-    doc.fillColor(GRAY).fontSize(9);
-    renderBidiLineRight(
-      doc,
-      `رقم الطلب: ${order.id}`,
-      marginX + infoZoneWidth,
-      headerTop,
-    );
-    doc.fillColor(ORANGE).fontSize(10);
-    renderBidiLineRight(
-      doc,
-      ORDER_STATUS_LABELS[order.status] ?? order.status,
-      marginX + infoZoneWidth,
-      doc.y,
-    );
-
-    doc.y = Math.max(doc.y, headerTop + logoWidth) + 12;
-    doc
-      .moveTo(marginX, doc.y)
-      .lineTo(marginX + contentWidth, doc.y)
-      .strokeColor(ORANGE)
-      .lineWidth(1.5)
-      .stroke();
-    doc.moveDown(1.5);
-
-    // Customer on the right (reads first), order details on the left.
-    const columnWidth = contentWidth / 2 - 10;
-    const sectionTop = doc.y;
-    const leftColRight = marginX + columnWidth;
-    const rightColRight = marginX + contentWidth;
-
-    const labelValue = (xRight: number, label: string, value: string) => {
-      renderBidiLineRight(doc, `${label}: ${value}`, xRight, doc.y);
+    const labelValue = (label: string, value: string) => {
+      doc.fillColor(TEXT).fontSize(8);
+      renderBidiLineRight(doc, `${label}: ${value}`, pageRight, doc.y);
       doc.moveDown(0.3);
     };
 
-    doc.y = sectionTop;
-    doc.fillColor(ORANGE).fontSize(10);
-    renderBidiLineRight(doc, 'تفاصيل الطلب', leftColRight, doc.y);
-    doc.moveDown(0.3);
-    doc.fillColor(TEXT).fontSize(9);
-    labelValue(
-      leftColRight,
-      'النوع',
-      ORDER_TYPE_LABELS[order.type] ?? order.type,
-    );
-    labelValue(leftColRight, 'وقت الطلب', order.createdAt.toLocaleString());
-    if (order.estimatedReadyTimeMinutes != null) {
-      labelValue(
-        leftColRight,
-        'وقت التجهيز',
-        `${order.estimatedReadyTimeMinutes} دقيقة`,
-      );
-    }
-    const leftBottom = doc.y;
+    // Header: centered logo, store name, address.
+    const logoWidth = 40;
+    doc.image(LOGO_PATH, centerX - logoWidth / 2, doc.y, {
+      width: logoWidth,
+    });
+    doc.y += logoWidth + 8;
 
-    doc.y = sectionTop;
-    doc.fillColor(ORANGE).fontSize(10);
-    renderBidiLineRight(doc, 'بيانات العميل', rightColRight, doc.y);
+    doc.fillColor(ORANGE).fontSize(14);
+    renderBidiLineCenter(doc, order.store.name, centerX, doc.y);
+    doc.moveDown(0.2);
+    doc.fillColor(GRAY).fontSize(8);
+    renderBidiLineCenter(doc, order.store.address, centerX, doc.y);
+    doc.moveDown(0.4);
+
+    divider();
+
+    // Order info.
+    doc.fillColor(GRAY).fontSize(8);
+    renderBidiLineRight(doc, `رقم الطلب: ${order.id}`, pageRight, doc.y);
     doc.moveDown(0.3);
-    doc.fillColor(TEXT).fontSize(9);
-    labelValue(
-      rightColRight,
-      'الاسم',
-      `${order.user.firstName} ${order.user.lastName}`,
+    doc.fillColor(ORANGE).fontSize(9);
+    renderBidiLineRight(
+      doc,
+      ORDER_STATUS_LABELS[order.status] ?? order.status,
+      pageRight,
+      doc.y,
     );
-    labelValue(rightColRight, 'الهاتف', order.phone);
+    doc.moveDown(0.3);
+    labelValue('النوع', ORDER_TYPE_LABELS[order.type] ?? order.type);
+    labelValue('وقت الطلب', order.createdAt.toLocaleString());
+    if (order.estimatedReadyTimeMinutes != null) {
+      labelValue('وقت التجهيز', `${order.estimatedReadyTimeMinutes} دقيقة`);
+    }
+
+    divider();
+
+    // Customer info.
+    labelValue('الاسم', `${order.user.firstName} ${order.user.lastName}`);
+    labelValue('الهاتف', order.phone);
     if (order.type === 'DELIVERY' && order.address) {
-      labelValue(rightColRight, 'العنوان', order.address);
+      labelValue('العنوان', order.address);
     }
     if (order.note) {
-      labelValue(rightColRight, 'ملاحظة', order.note);
+      labelValue('ملاحظة', order.note);
     }
-    const rightBottom = doc.y;
 
-    doc.x = marginX;
-    doc.y = Math.max(leftBottom, rightBottom) + 15;
+    divider();
 
-    // Items table, columns ordered right-to-left: item name is the
-    // rightmost (main) column, numeric columns proceed to its left.
-    doc.table({
-      columnStyles: [70, 70, 50, '*'],
-      defaultStyle: {
-        padding: 6,
-        border: [0, 0, 1, 0],
-        borderColor: BORDER,
-        textColor: TEXT,
-        align: { x: 'right' },
-      },
-      data: [
-        [
-          { text: 'الإجمالي', backgroundColor: PEACH, textColor: ORANGE },
-          {
-            text: 'سعر الوحدة',
-            backgroundColor: PEACH,
-            textColor: ORANGE,
-          },
-          { text: 'الكمية', backgroundColor: PEACH, textColor: ORANGE },
-          { text: 'الصنف', backgroundColor: PEACH, textColor: ORANGE },
-        ],
-        ...order.items.map((item) => [
-          Number(item.totalPrice).toFixed(2),
-          Number(item.unitPrice).toFixed(2),
-          String(item.quantity),
-          item.note
-            ? `${toDisplayString(item.itemName)}\n${toDisplayString(item.note)}`
-            : toDisplayString(item.itemName),
-        ]),
-      ],
-    });
+    // Items: name right-aligned on its own line, qty x unit price / total
+    // on the line below it.
+    for (const item of order.items) {
+      doc.fillColor(TEXT).fontSize(9);
+      renderBidiLineRight(doc, item.itemName, pageRight, doc.y);
+      doc.moveDown(0.15);
+      if (item.note) {
+        doc.fillColor(GRAY).fontSize(7);
+        renderBidiLineRight(doc, item.note, pageRight, doc.y);
+        doc.moveDown(0.15);
+      }
+      doc.fillColor(GRAY).fontSize(8);
+      doc.text(Number(item.totalPrice).toFixed(2), MARGIN, doc.y, {
+        continued: false,
+      });
+      renderBidiLineRight(
+        doc,
+        `${item.quantity} × ${Number(item.unitPrice).toFixed(2)}`,
+        pageRight,
+        doc.y - doc.currentLineHeight(),
+      );
+      doc.moveDown(0.4);
+    }
 
-    doc.moveDown(1);
+    divider();
 
-    // Totals, left-flush (the "end" of an RTL line), grand total highlighted.
+    // Totals.
     const subtotal = order.items.reduce(
       (sum, item) => sum + Number(item.totalPrice),
       0,
     );
-    doc.fillColor(GRAY).fontSize(9);
+    doc.fillColor(GRAY).fontSize(8);
     renderBidiLineRight(
       doc,
       `المجموع الفرعي: ${subtotal.toFixed(2)}`,
-      marginX + 180,
+      pageRight,
       doc.y,
     );
+    doc.moveDown(0.3);
     if (Number(order.deliveryFee) > 0) {
-      doc.moveDown(0.2);
       renderBidiLineRight(
         doc,
         `رسوم التوصيل: ${Number(order.deliveryFee).toFixed(2)}`,
-        marginX + 180,
+        pageRight,
         doc.y,
       );
+      doc.moveDown(0.3);
     }
 
-    doc.moveDown(0.5);
-    const totalBoxWidth = 180;
-    const totalBoxHeight = 28;
-    const totalBoxX = marginX;
+    doc.moveDown(0.2);
+    const totalBoxHeight = 24;
     const totalBoxY = doc.y;
     doc
-      .roundedRect(totalBoxX, totalBoxY, totalBoxWidth, totalBoxHeight, 6)
+      .roundedRect(MARGIN, totalBoxY, contentWidth, totalBoxHeight, 5)
       .fill(PEACH);
-    doc.fillColor(ORANGE).fontSize(13);
+    doc.fillColor(ORANGE).fontSize(11);
     renderBidiLineRight(
       doc,
       `الإجمالي: ${Number(order.total).toFixed(2)}`,
-      totalBoxX + totalBoxWidth,
-      totalBoxY + 7,
+      pageRight - 8,
+      totalBoxY + 6,
     );
+    doc.y = totalBoxY + totalBoxHeight;
 
-    doc.y = totalBoxY + totalBoxHeight + 30;
-    doc
-      .moveTo(marginX, doc.y)
-      .lineTo(marginX + contentWidth, doc.y)
-      .strokeColor(BORDER)
-      .lineWidth(1)
-      .stroke();
-    doc.moveDown(0.8);
-    doc.fillColor(GRAY).fontSize(8);
+    divider(false);
+
+    doc.fillColor(GRAY).fontSize(7);
     renderBidiLineCenter(
       doc,
       `تمت الطباعة في ${new Date().toLocaleString()}`,
-      marginX + contentWidth / 2,
+      centerX,
       doc.y,
     );
-
-    doc.end();
-
-    return done;
+    doc.moveDown(0.5);
   }
 }

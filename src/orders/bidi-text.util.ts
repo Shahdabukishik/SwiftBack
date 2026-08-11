@@ -21,13 +21,25 @@ function splitIntoRuns(text: string, levels: Uint8Array): BidiRun[] {
   return runs;
 }
 
+// pdfkit draws characters at strictly increasing x (left-to-right) and
+// never reorders a run for RTL advance direction itself — it just shapes
+// glyphs (letter-joining) per string. So a whole same-level RTL run (e.g. a
+// pure-Arabic multi-word phrase) reaches bidi-js's reorder step as a single
+// run with nothing to swap it against, and comes out with word order
+// untouched — backwards once drawn left-to-right. Word order within an RTL
+// run has to be flipped explicitly before rendering; per-word joining still
+// works since each word's internal character order is untouched.
+function reverseWordOrder(text: string): string {
+  return text.split(/(\s+)/).reverse().join('');
+}
+
 // pdfkit/fontkit shape glyphs per string but don't reorder mixed-direction
 // text into visual order. Reversing at the character level (the naive fix)
 // breaks Arabic letter-joining, since shaping needs characters in logical
 // order. Instead: split into same-direction runs (each run's internal
 // character order stays untouched, so joining still works), mirror
-// brackets/parens, then reorder the *runs* into visual (left-to-right
-// drawing) order.
+// brackets/parens, reverse word order within RTL runs, then reorder the
+// *runs* into visual (left-to-right drawing) order.
 function reorderRuns(text: string, baseDirection: BaseDirection): string[] {
   if (!text) return [text];
 
@@ -39,7 +51,12 @@ function reorderRuns(text: string, baseDirection: BaseDirection): string[] {
     chars[index] = replacement;
   });
 
-  const runs = splitIntoRuns(chars.join(''), embeddingLevels.levels);
+  const runs = splitIntoRuns(chars.join(''), embeddingLevels.levels).map(
+    (run) =>
+      run.level % 2 === 1
+        ? { ...run, text: reverseWordOrder(run.text) }
+        : run,
+  );
 
   const runOfChar: number[] = [];
   runs.forEach((run, runIndex) => {

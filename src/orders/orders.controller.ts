@@ -166,6 +166,7 @@ export class OrdersController {
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="order-${orderId}.pdf"`,
+      'Cache-Control': 'no-store',
     });
 
     return new StreamableFile(pdf);
