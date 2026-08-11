@@ -17,16 +17,23 @@ import { ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderStatus } from '@prisma/client';
 import { CUSTOMER_ORDER_TYPES } from '../orders.constants';
 
-export class OrderItemQuantityUpdateDto {
+export class OrderItemUpdateDto {
   @IsUUID()
   @ApiPropertyOptional()
   id!: string;
 
+  @IsOptional()
   @IsInt()
   @Type(() => Number)
   @Min(1)
   @ApiPropertyOptional()
-  quantity!: number;
+  quantity?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  @ApiPropertyOptional({ example: 'no onions' })
+  note?: string;
 }
 
 export class OrderUpdateDto {
@@ -70,12 +77,13 @@ export class OrderUpdateDto {
   @ApiPropertyOptional()
   phone?: string;
 
-  // Quantity edits for existing items on this order. Recalculates that
-  // item's totalPrice and the order's total automatically.
+  // Edits for existing items on this order — quantity, note, or both.
+  // Changing quantity recalculates that item's totalPrice and the
+  // order's total automatically.
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => OrderItemQuantityUpdateDto)
-  @ApiPropertyOptional({ type: [OrderItemQuantityUpdateDto] })
-  items?: OrderItemQuantityUpdateDto[];
+  @Type(() => OrderItemUpdateDto)
+  @ApiPropertyOptional({ type: [OrderItemUpdateDto] })
+  items?: OrderItemUpdateDto[];
 }

@@ -756,7 +756,8 @@ export class OrdersService {
    *   CONFIRMED, or IN_PROGRESS. Also awards points when the status
    *   lands on FINISHED.
    *
-   * Changing an item's quantity recalculates that item's totalPrice and
+   * Each entry in `items` can update an existing item's quantity, note,
+   * or both. Changing quantity recalculates that item's totalPrice and
    * the order's total automatically. Switching `type` between PICKUP and
    * DELIVERY recalculates deliveryFee (and total) too: switching to
    * DELIVERY requires an address (sent alongside, or already on the
@@ -814,22 +815,29 @@ export class OrdersService {
           }
         }
 
-        const quantityById = new Map(
-          dto.items.map((item) => [item.id, item.quantity]),
+        const updateById = new Map(
+          dto.items.map((itemUpdate) => [itemUpdate.id, itemUpdate]),
         );
 
         itemsTotal = 0;
 
         for (const item of order.items) {
-          const quantity = quantityById.get(item.id) ?? item.quantity;
+          const itemUpdate = updateById.get(item.id);
+          const quantity = itemUpdate?.quantity ?? item.quantity;
           const totalPrice = Number(item.unitPrice) * quantity;
 
           itemsTotal += totalPrice;
 
-          if (quantityById.has(item.id)) {
+          if (itemUpdate) {
             await tx.orderItem.update({
               where: { id: item.id },
-              data: { quantity, totalPrice },
+              data: {
+                quantity,
+                totalPrice,
+                ...(itemUpdate.note !== undefined
+                  ? { note: itemUpdate.note }
+                  : {}),
+              },
             });
           }
         }
