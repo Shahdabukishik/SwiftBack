@@ -43,6 +43,12 @@ export class OrderUpdateDto {
   @ApiPropertyOptional({ enum: OrderStatus })
   status?: OrderStatus;
 
+  // Admin only — reassigns the order to a different store.
+  @IsOptional()
+  @IsUUID()
+  @ApiPropertyOptional()
+  storeId?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(255)

@@ -744,10 +744,10 @@ export class OrdersService {
   /**
    * Update an order.
    *
-   * - ADMIN: unrestricted override of status/note/total/address/phone/
-   *   type/items — no status-transition rules. Awards points when the
-   *   status lands on FINISHED. Does not adjust points already awarded
-   *   if the total changes.
+   * - ADMIN: unrestricted override of status/storeId/note/total/address/
+   *   phone/type/items — no status-transition rules. Awards points when
+   *   the status lands on FINISHED. Does not adjust points already
+   *   awarded if the total changes.
    * - CASHIER: scoped to their own store, cannot touch total directly,
    *   and can only edit (including status, e.g. to cancel) while the
    *   order isn't FINISHED or CANCELLED yet — same as admin, status is
@@ -775,6 +775,23 @@ export class OrdersService {
       throw new ForbiddenException(
         'Cashiers cannot change order total directly',
       );
+    }
+
+    if (isCashier && dto.storeId !== undefined) {
+      throw new ForbiddenException(
+        'Cashiers cannot change the order store',
+      );
+    }
+
+    if (dto.storeId !== undefined) {
+      const targetStore = await this.prisma.store.findUnique({
+        where: { id: dto.storeId },
+        select: { id: true },
+      });
+
+      if (!targetStore) {
+        throw new NotFoundException('Store not found');
+      }
     }
 
     const updatedOrder = await this.prisma.$transaction(async (tx) => {
@@ -874,6 +891,7 @@ export class OrdersService {
         where: { id: order.id },
         data: {
           ...(dto.status !== undefined ? { status: dto.status } : {}),
+          ...(dto.storeId !== undefined ? { storeId: dto.storeId } : {}),
           ...(dto.note !== undefined ? { note: dto.note } : {}),
           ...(dto.type !== undefined ? { type: dto.type } : {}),
           ...(resolvedAddress !== undefined
