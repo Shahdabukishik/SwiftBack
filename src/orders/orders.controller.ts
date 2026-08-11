@@ -8,9 +8,12 @@ import {
   Post,
   Query,
   Req,
+  Res,
+  StreamableFile,
   UseGuards,
   Version,
 } from '@nestjs/common';
+import type { Response } from 'express';
 
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -18,6 +21,7 @@ import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorator/roles.decorator';
 import { OrdersService } from './orders.service';
+import { OrderReportService } from './order-report.service';
 import { UserRole } from '../users/enums/user-role.enum';
 
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -30,7 +34,10 @@ import { UpdateOrderReadyTimeDto } from './dto/update-order-ready-time.dto';
 @ApiBearerAuth()
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) { }
+  constructor(
+    private readonly ordersService: OrdersService,
+    private readonly orderReportService: OrderReportService,
+  ) {}
 
   /**
    * Create Order
@@ -125,6 +132,43 @@ export class OrdersController {
       { userId: req.user.userId, role: req.user.role },
       orderId,
     );
+  }
+
+  /**
+   * Get a printable PDF report for an order.
+   *
+   * - ADMIN: any order.
+   * - CASHIER: only orders placed at their own assigned store.
+   *
+   * GET /orders/manage/:id/report
+   */
+  @Version('1')
+  @Get('/manage/:id/report')
+  @ApiOperation({
+    summary:
+      'Get a printable PDF report for an order (admin: any store; cashier: own store)',
+  })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN, UserRole.CASHIER)
+  async getOrderReport(
+    @Req() req: any,
+    @Param('id')
+    orderId: string,
+    @Res({ passthrough: true })
+    res: Response,
+  ) {
+    const order = await this.ordersService.findOrder(
+      { userId: req.user.userId, role: req.user.role },
+      orderId,
+    );
+    const pdf = await this.orderReportService.generatePdf(order);
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="order-${orderId}.pdf"`,
+    });
+
+    return new StreamableFile(pdf);
   }
 
   /**
