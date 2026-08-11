@@ -17,6 +17,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateInStoreOrderDto } from './dto/create-in-store-order.dto';
 import { OrdersQueryDto } from './dto/orders-query.dto';
 import { OrderUpdateDto } from './dto/order-update.dto';
+import { UpdateOrderReadyTimeDto } from './dto/update-order-ready-time.dto';
 import { DELIVERY_FEE, GUEST_USER_ID } from './orders.constants';
 
 // How far back a cashier can see their own store's order history.
@@ -29,7 +30,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pointsEngineService: PointsEngineService,
-  ) {}
+  ) { }
 
   /**
    * Create a new order for a registered user or guest.
@@ -475,13 +476,13 @@ export class OrdersService {
     const guestSentinel = customer
       ? null
       : await this.prisma.user.findUniqueOrThrow({
-          where: {
-            id: GUEST_USER_ID,
-          },
-          select: {
-            phone: true,
-          },
-        });
+        where: {
+          id: GUEST_USER_ID,
+        },
+        select: {
+          phone: true,
+        },
+      });
 
     const resolvedUserId = customer?.id ?? GUEST_USER_ID;
 
@@ -931,13 +932,13 @@ export class OrdersService {
           ...(deliveryFee !== undefined ? { deliveryFee } : {}),
           ...(recalculateTotal
             ? {
-                total:
-                  (itemsTotal ??
-                    order.items.reduce(
-                      (sum, item) => sum + Number(item.totalPrice),
-                      0,
-                    )) + (deliveryFee ?? Number(order.deliveryFee)),
-              }
+              total:
+                (itemsTotal ??
+                  order.items.reduce(
+                    (sum, item) => sum + Number(item.totalPrice),
+                    0,
+                  )) + (deliveryFee ?? Number(order.deliveryFee)),
+            }
             : dto.total !== undefined
               ? { total: dto.total }
               : {}),
@@ -983,5 +984,98 @@ export class OrdersService {
     await this.prisma.order.delete({ where: { id: orderId } });
 
     return { id: orderId, deleted: true };
+  }
+
+  /**
+ * Set the estimated ready time for an order.
+ *
+ * The cashier must be assigned to the store
+ * that owns the order.
+ */
+  async updateOrderReadyTime(
+    orderId: string,
+    cashierId: string,
+    dto: UpdateOrderReadyTimeDto,
+  ) {
+    // --------------------------------------------------
+    // 1. Get Cashier Store Assignment
+    // --------------------------------------------------
+
+    const storeCashier =
+      await this.prisma.storeCashier.findUnique({
+        where: {
+          cashierId,
+        },
+        select: {
+          storeId: true,
+        },
+      });
+
+    if (!storeCashier) {
+      throw new NotFoundException(
+        'Cashier is not assigned to a store',
+      );
+    }
+
+    // --------------------------------------------------
+    // 2. Find Order in Cashier's Store
+    // --------------------------------------------------
+
+    const order =
+      await this.prisma.order.findFirst({
+        where: {
+          id: orderId,
+          storeId: storeCashier.storeId,
+        },
+        select: {
+          id: true,
+          status: true,
+        },
+      });
+
+    if (!order) {
+      throw new NotFoundException(
+        'Order not found',
+      );
+    }
+
+    // --------------------------------------------------
+    // 3. Validate Order Status
+    // --------------------------------------------------
+
+    if (
+      order.status !== OrderStatus.CONFIRMED &&
+      order.status !== OrderStatus.IN_PROGRESS
+    ) {
+      throw new BadRequestException(
+        `Cannot set estimated ready time for an order with status ${order.status}`,
+      );
+    }
+
+    // --------------------------------------------------
+    // 4. Update Estimated Ready Time
+    // --------------------------------------------------
+
+    return this.prisma.order.update({
+      where: {
+        id: order.id,
+      },
+
+      data: {
+        estimatedReadyTimeMinutes:
+          dto.estimatedReadyTimeMinutes,
+      },
+
+      include: {
+        items: true,
+
+        store: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
   }
 }

@@ -24,12 +24,13 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { CreateInStoreOrderDto } from './dto/create-in-store-order.dto';
 import { OrdersQueryDto } from './dto/orders-query.dto';
 import { OrderUpdateDto } from './dto/order-update.dto';
+import { UpdateOrderReadyTimeDto } from './dto/update-order-ready-time.dto';
 
 @ApiTags('Orders')
 @ApiBearerAuth()
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(private readonly ordersService: OrdersService) { }
 
   /**
    * Create Order
@@ -248,5 +249,32 @@ export class OrdersController {
     dto: CreateInStoreOrderDto,
   ) {
     return this.ordersService.createInStoreOrder(req.user.userId, dto);
+  }
+
+  /**
+ * Set estimated ready time for an order.
+ *
+ * PATCH /orders/:id/ready-time
+ */
+  @Version('1')
+  @ApiOperation({
+    summary: 'Set estimated order ready time',
+  })
+  @Patch('/:id/ready-time')
+  @UseGuards(
+    JwtAuthGuard,
+    RolesGuard,
+  )
+  @Roles(UserRole.CASHIER)
+  async updateOrderReadyTime(
+    @Req() req: any,
+    @Param('id') orderId: string,
+    @Body() dto: UpdateOrderReadyTimeDto,
+  ) {
+    return this.ordersService.updateOrderReadyTime(
+      orderId,
+      req.user.userId,
+      dto,
+    );
   }
 }

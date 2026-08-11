@@ -389,6 +389,7 @@ model Order {
 
   address     String?
   deliveryFee Decimal @db.Decimal(10, 2) @default(0)
+  estimatedReadyTimeMinutes Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
