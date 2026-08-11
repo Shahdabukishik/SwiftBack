@@ -231,8 +231,10 @@ model PointsReward {
 
   redeemItems PointsRedeemItem[]
 
-  // Relations
-  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  // Relations. Cascade: a reward for a menu item that no longer exists
+  // can't be redeemed, so it shouldn't be left dangling in /redeem.
+  // Past redemption history survives via PointsRedeemItem.itemName.
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
 
   @@map("points_rewards")
 }
@@ -415,7 +417,7 @@ model Order {
 model OrderItem {
   id         String @id @default(uuid())
   orderId    String
-  menuItemId Int
+  menuItemId Int?
 
   itemName   String
   quantity   Int
@@ -423,8 +425,11 @@ model OrderItem {
   totalPrice Decimal @db.Decimal(10, 2)
   note       String?
 
-  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItem MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Nullable + SetNull: order history must survive the menu item being
+  // deleted later. itemName/unitPrice already snapshot what was ordered.
+  menuItem MenuItem? @relation(fields: [menuItemId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([menuItemId])
