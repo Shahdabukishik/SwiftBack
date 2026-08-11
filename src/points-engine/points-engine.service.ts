@@ -53,6 +53,7 @@ interface RedeemRewardItemInput {
   rewardId: string;
   quantity: number;
   pointsPerItem: Prisma.Decimal | number;
+  itemName: string;
 }
 
 interface RedeemRewardInput extends BasePointsOperation {
@@ -237,6 +238,7 @@ export class PointsEngineService {
             totalPoints: this.toDecimal(
               Number(this.toDecimal(item.pointsPerItem)) * item.quantity,
             ),
+            itemName: item.itemName,
           })),
         });
       },

@@ -306,7 +306,10 @@ model PointsRedeemItem {
 
   transactionId String @map("transaction_id") @db.Uuid
 
-  rewardId String @map("reward_id") @db.Uuid
+  // Nullable + SetNull: redeem history must survive the reward being
+  // deleted later. pointsPerItem/totalPoints already snapshot the points
+  // cost, so a null reward just means "this reward no longer exists".
+  rewardId String? @map("reward_id") @db.Uuid
 
   quantity Int
 
@@ -314,9 +317,13 @@ model PointsRedeemItem {
 
   totalPoints Decimal @map("total_points") @db.Decimal(10, 2)
 
+  // Snapshot of the menu item name at redemption time, so transaction
+  // history still shows what was redeemed after the reward is deleted.
+  itemName String @map("item_name") @db.VarChar(150)
+
   transaction PointsTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
 
-  reward PointsReward @relation(fields: [rewardId], references: [id], onDelete: Restrict)
+  reward PointsReward? @relation(fields: [rewardId], references: [id], onDelete: SetNull)
 
   @@map("points_redeem_items")
 }

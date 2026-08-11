@@ -53,7 +53,7 @@ export class RedeemPointsService {
     }
 
     const rewardMap = new Map(rewards.map((reward) => [reward.id, reward]));
-    const redeemItems: Array<{ rewardId: string; quantity: number; pointsPerItem: Prisma.Decimal }> = [];
+    const redeemItems: Array<{ rewardId: string; quantity: number; pointsPerItem: Prisma.Decimal; itemName: string }> = [];
     let requiredPoints = 0;
 
     for (const item of dto.items) {
@@ -77,6 +77,7 @@ export class RedeemPointsService {
         rewardId: item.rewardId,
         quantity: item.quantity,
         pointsPerItem,
+        itemName: reward.menuItem.name,
       });
     }
 
