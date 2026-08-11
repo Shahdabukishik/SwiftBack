@@ -1,6 +1,12 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, TransformFnParams } from 'class-transformer';
-import { IsArray, IsEnum, IsOptional, IsUUID } from 'class-validator';
+import {
+  IsArray,
+  IsDateString,
+  IsEnum,
+  IsOptional,
+  IsUUID,
+} from 'class-validator';
 import { OrderStatus, OrderType } from '@prisma/client';
 import { PaginationDto } from 'src/common/dto/pagination.dto';
 
@@ -50,4 +56,23 @@ export class OrdersQueryDto extends PaginationDto {
   @IsUUID()
   @ApiPropertyOptional()
   storeId?: string;
+
+  // Filters orders created on/after this date (whole day, server-local).
+  // A cashier's 3-day history cap still applies on top of this.
+  @IsOptional()
+  @IsDateString()
+  @ApiPropertyOptional({
+    example: '2026-08-01',
+    description: 'Filter orders created on/after this date (YYYY-MM-DD)',
+  })
+  from?: string;
+
+  // Filters orders created on/before this date (whole day, server-local).
+  @IsOptional()
+  @IsDateString()
+  @ApiPropertyOptional({
+    example: '2026-08-11',
+    description: 'Filter orders created on/before this date (YYYY-MM-DD)',
+  })
+  to?: string;
 }
