@@ -27,8 +27,6 @@ import { RolesGuard } from 'src/auth/guards/roles.guard';
 
 
 @ApiTags('Points Rewards')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
 @Controller('points-rewards')
 export class PointsRewardsController {
     constructor(private readonly pointsRewardsService: PointsRewardsService) { }
@@ -47,8 +45,6 @@ export class PointsRewardsController {
         return this.pointsRewardsService.create(createPointsRewardDto);
     }
 
-    @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard)
     @Version('1')
     @Get()
     @ApiOperation({ summary: 'Retrieve all points rewards' })
@@ -57,8 +53,6 @@ export class PointsRewardsController {
         return this.pointsRewardsService.findAll();
     }
 
-    @ApiBearerAuth()
-    @UseGuards(JwtAuthGuard)
     @Version('1')
     @Get(':pointsRewardId')
     @ApiOperation({ summary: 'Retrieve a single points reward by ID' })
