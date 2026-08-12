@@ -53,6 +53,14 @@ export class StoreController {
 
     @ApiBearerAuth()
     @UseGuards(JwtAuthGuard, RolesGuard)
+    @Get(':storeId/cashiers')
+    @Roles(UserRole.ADMIN)
+    getCashiers(@Param('storeId') id: string) {
+        return this.storeService.getCashiers(id);
+    }
+
+    @ApiBearerAuth()
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Delete(':storeId')
     @Roles(UserRole.ADMIN)
     remove(@Param('storeId') id: string) {

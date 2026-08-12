@@ -51,6 +51,32 @@ export class StoreService {
         });
     }
 
+    async getCashiers(storeId: string) {
+        const store = await this.prisma.store.findUnique({
+            where: { id: storeId },
+        });
+
+        if (!store) {
+            throw new NotFoundException('Store not found');
+        }
+
+        const storeCashiers = await this.prisma.storeCashier.findMany({
+            where: { storeId },
+            include: {
+                cashier: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        phone: true,
+                    },
+                },
+            },
+        });
+
+        return storeCashiers.map((storeCashier) => storeCashier.cashier);
+    }
+
     async remove(id: string) {
         const store = await this.prisma.store.findUnique({
             where: { id },
