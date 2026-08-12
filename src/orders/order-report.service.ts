@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { join } from 'path';
 import PDFDocument from 'pdfkit';
 import { OrdersService } from './orders.service';
+import { GUEST_USER_ID } from './orders.constants';
 import { renderBidiLineCenter, renderBidiLineRight } from './bidi-text.util';
 
 type OrderForReport = Awaited<ReturnType<OrdersService['findOrder']>>;
@@ -135,7 +136,13 @@ export class OrderReportService {
     divider();
 
     // Customer info.
-    labelValue('الاسم', `${order.user.firstName} ${order.user.lastName}`);
+    const link = order.customerOrder;
+    const customer =
+      link && link.customerId !== GUEST_USER_ID ? link.customer : null;
+    labelValue(
+      'الاسم',
+      customer ? `${customer.firstName} ${customer.lastName}` : 'ضيف',
+    );
     labelValue('الهاتف', order.phone);
     if (order.type === 'DELIVERY' && order.address) {
       labelValue('العنوان', order.address);
