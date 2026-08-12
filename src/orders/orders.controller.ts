@@ -228,23 +228,6 @@ export class OrdersController {
   }
 
   /**
-   * Get authenticated user's
-   * specific order.
-   *
-   * GET /orders/:id
-   */
-  @Version('1')
-  @Get(':id')
-  @UseGuards(JwtAuthGuard)
-  async getOrderById(
-    @Req() req: any,
-    @Param('id')
-    orderId: string,
-  ) {
-    return this.ordersService.getOrderById(orderId, req.user.userId);
-  }
-
-  /**
    * Cancel own order while it's still CONFIRMED.
    *
    * PATCH /orders/:id/cancel

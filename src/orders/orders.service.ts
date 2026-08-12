@@ -281,47 +281,6 @@ export class OrdersService {
   }
 
   /**
-   * Get a specific order belonging
-   * to the authenticated user.
-   */
-  async getOrderById(orderId: string, userId: string) {
-    const order = await this.prisma.order.findFirst({
-      where: {
-        id: orderId,
-        userId,
-      },
-
-      include: {
-        store: {
-          select: {
-            id: true,
-            name: true,
-            address: true,
-            phone: true,
-          },
-        },
-
-        items: {
-          select: {
-            id: true,
-            menuItemId: true,
-            itemName: true,
-            quantity: true,
-            unitPrice: true,
-            totalPrice: true,
-          },
-        },
-      },
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found');
-    }
-
-    return order;
-  }
-
-  /**
    * List orders, paginated and optionally filtered by status/type/store.
    * status and type each accept one or more values (matched with `in`).
    *
@@ -740,8 +699,7 @@ export class OrdersService {
   }
 
   /**
-   * Get any single order — no customer-ownership check, unlike
-   * getOrderById.
+   * Get any single order — no customer-ownership check.
    *
    * - ADMIN: any order.
    * - CASHIER: only orders placed at their own assigned store.
