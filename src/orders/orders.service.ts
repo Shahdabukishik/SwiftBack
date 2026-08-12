@@ -18,7 +18,11 @@ import { CreateInStoreOrderDto } from './dto/create-in-store-order.dto';
 import { OrdersQueryDto } from './dto/orders-query.dto';
 import { OrderUpdateDto } from './dto/order-update.dto';
 import { UpdateOrderReadyTimeDto } from './dto/update-order-ready-time.dto';
-import { DELIVERY_FEE, UNKNOWN_CUSTOMER_PHONE } from './orders.constants';
+import {
+  DELIVERY_FEE,
+  GUEST_USER_ID,
+  UNKNOWN_CUSTOMER_PHONE,
+} from './orders.constants';
 
 // How far back a cashier can see their own store's order history.
 const CASHIER_HISTORY_DAYS = 3;
@@ -186,12 +190,13 @@ export class OrdersService {
       // --------------------------------------------------
       // 8b. Link Customer (or Guest)
       // --------------------------------------------------
-      // customerId is null for a guest order — customer_order is the
-      // single source of truth for "who placed this order" either way.
+      // Guests share one fixed placeholder customerId instead of null —
+      // customer_order is the single source of truth for "who placed this
+      // order" either way.
 
       await tx.customerOrder.create({
         data: {
-          customerId: userId,
+          customerId: userId ?? GUEST_USER_ID,
           orderId: order.id,
         },
       });
@@ -462,7 +467,7 @@ export class OrdersService {
 
       await tx.customerOrder.create({
         data: {
-          customerId: customer?.id ?? null,
+          customerId: customer?.id ?? GUEST_USER_ID,
           orderId: created.id,
         },
       });
@@ -472,7 +477,7 @@ export class OrdersService {
 
     await this.awardOrderPoints({
       orderId: order.id,
-      userId: customer?.id ?? null,
+      userId: customer?.id ?? GUEST_USER_ID,
       createdBy: cashierId,
       purchaseAmount: Number(order.total),
     });
@@ -555,7 +560,7 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    if (order.customerOrder.customerId !== null) {
+    if (order.customerOrder.customerId !== GUEST_USER_ID) {
       throw new BadRequestException('This order has already been claimed');
     }
 
@@ -599,7 +604,7 @@ export class OrdersService {
 
   /**
    * Award purchase points for a FINISHED order, unless:
-   * - the order has no linked customer (guest order — nothing to award to), or
+   * - the order still belongs to the guest sentinel (nothing to award to), or
    * - points were already awarded for this order (idempotency guard, keyed
    *   on the order id via PointsTransaction.referenceId).
    *
@@ -609,12 +614,12 @@ export class OrdersService {
    */
   private async awardOrderPoints(params: {
     orderId: string;
-    userId: string | null;
+    userId: string;
     createdBy: string;
     purchaseAmount: number;
     storeOverride?: { storeId: string; storeName: string } | null;
   }) {
-    if (!params.userId) {
+    if (params.userId === GUEST_USER_ID) {
       return;
     }
 
@@ -898,7 +903,7 @@ export class OrdersService {
 
       await this.awardOrderPoints({
         orderId: updatedOrder.id,
-        userId: link?.customerId ?? null,
+        userId: link?.customerId ?? GUEST_USER_ID,
         createdBy: caller.userId,
         purchaseAmount:
           Number(updatedOrder.total) - Number(updatedOrder.deliveryFee),
