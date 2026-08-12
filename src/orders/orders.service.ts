@@ -18,7 +18,7 @@ import { CreateInStoreOrderDto } from './dto/create-in-store-order.dto';
 import { OrdersQueryDto } from './dto/orders-query.dto';
 import { OrderUpdateDto } from './dto/order-update.dto';
 import { UpdateOrderReadyTimeDto } from './dto/update-order-ready-time.dto';
-import { DELIVERY_FEE, GUEST_USER_ID } from './orders.constants';
+import { DELIVERY_FEE, UNKNOWN_CUSTOMER_PHONE } from './orders.constants';
 
 // How far back a cashier can see their own store's order history.
 const CASHIER_HISTORY_DAYS = 3;
@@ -47,9 +47,6 @@ export class OrdersService {
    */
   async createOrder(userId: string | null, createOrderDto: CreateOrderDto) {
     const { storeId, items, type, phone, address } = createOrderDto;
-
-    // Guests share one fixed placeholder user row instead of a NULL userId.
-    const resolvedUserId = userId ?? GUEST_USER_ID;
 
     return this.prisma.$transaction(async (tx) => {
       // --------------------------------------------------
@@ -170,7 +167,6 @@ export class OrdersService {
 
       const order = await tx.order.create({
         data: {
-          userId: resolvedUserId,
           storeId,
 
           status: OrderStatus.PENDING,
@@ -188,20 +184,17 @@ export class OrdersService {
       });
 
       // --------------------------------------------------
-      // 8b. Link Real Customers
+      // 8b. Link Customer (or Guest)
       // --------------------------------------------------
-      // Guests (resolvedUserId === GUEST_USER_ID) are excluded on
-      // purpose: every guest shares one id, so linking them here
-      // would incorrectly group all guest orders under one "customer".
+      // customerId is null for a guest order — customer_order is the
+      // single source of truth for "who placed this order" either way.
 
-      if (resolvedUserId !== GUEST_USER_ID) {
-        await tx.customerOrder.create({
-          data: {
-            customerId: resolvedUserId,
-            orderId: order.id,
-          },
-        });
-      }
+      await tx.customerOrder.create({
+        data: {
+          customerId: userId,
+          orderId: order.id,
+        },
+      });
 
       // --------------------------------------------------
       // 9. Mark Order as CONFIRMED
@@ -248,36 +241,42 @@ export class OrdersService {
    * Get the authenticated user's order history.
    */
   async getMyOrders(userId: string) {
-    return this.prisma.order.findMany({
+    const links = await this.prisma.customerOrder.findMany({
       where: {
-        userId,
+        customerId: userId,
       },
 
       orderBy: {
-        createdAt: 'desc',
+        order: { createdAt: 'desc' },
       },
 
       include: {
-        store: {
-          select: {
-            id: true,
-            name: true,
-            address: true,
-          },
-        },
+        order: {
+          include: {
+            store: {
+              select: {
+                id: true,
+                name: true,
+                address: true,
+              },
+            },
 
-        items: {
-          select: {
-            id: true,
-            menuItemId: true,
-            itemName: true,
-            quantity: true,
-            unitPrice: true,
-            totalPrice: true,
+            items: {
+              select: {
+                id: true,
+                menuItemId: true,
+                itemName: true,
+                quantity: true,
+                unitPrice: true,
+                totalPrice: true,
+              },
+            },
           },
         },
       },
     });
+
+    return links.map((link) => link.order);
   }
 
   /**
@@ -371,8 +370,12 @@ export class OrdersService {
           store: {
             select: { id: true, name: true },
           },
-          user: {
-            select: { id: true, firstName: true, lastName: true, phone: true },
+          customerOrder: {
+            include: {
+              customer: {
+                select: { id: true, firstName: true, lastName: true, phone: true },
+              },
+            },
           },
           items: true,
         },
@@ -422,9 +425,6 @@ export class OrdersService {
     const customer = await this.prisma.user.findFirst({
       where: {
         role: 'CUSTOMER',
-        id: {
-          not: GUEST_USER_ID,
-        },
         OR: [
           ...(isUUID(dto.customerLookup) ? [{ id: dto.customerLookup }] : []),
           { phone: dto.customerLookup },
@@ -432,30 +432,16 @@ export class OrdersService {
       },
     });
 
-    const guestSentinel = customer
-      ? null
-      : await this.prisma.user.findUniqueOrThrow({
-        where: {
-          id: GUEST_USER_ID,
-        },
-        select: {
-          phone: true,
-        },
-      });
-
-    const resolvedUserId = customer?.id ?? GUEST_USER_ID;
-
     // If the lookup was a phone number that matched no one, keep what
     // the cashier typed as the order's contact phone. Otherwise (a QR
     // scan that matched no one) there's no real phone to fall back on.
     const phone =
       customer?.phone ??
-      (isUUID(dto.customerLookup) ? guestSentinel!.phone : dto.customerLookup);
+      (isUUID(dto.customerLookup) ? UNKNOWN_CUSTOMER_PHONE : dto.customerLookup);
 
     const order = await this.prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
         data: {
-          userId: resolvedUserId,
           storeId: storeCashier.storeId,
           status: OrderStatus.FINISHED,
           type: OrderType.IN_STORE,
@@ -474,21 +460,19 @@ export class OrdersService {
         },
       });
 
-      if (customer) {
-        await tx.customerOrder.create({
-          data: {
-            customerId: customer.id,
-            orderId: created.id,
-          },
-        });
-      }
+      await tx.customerOrder.create({
+        data: {
+          customerId: customer?.id ?? null,
+          orderId: created.id,
+        },
+      });
 
       return created;
     });
 
     await this.awardOrderPoints({
       orderId: order.id,
-      userId: order.userId,
+      userId: customer?.id ?? null,
       createdBy: cashierId,
       purchaseAmount: Number(order.total),
     });
@@ -504,16 +488,16 @@ export class OrdersService {
    * longer back out.
    */
   async cancelOrder(orderId: string, userId: string) {
-    const order = await this.prisma.order.findFirst({
-      where: {
-        id: orderId,
-        userId,
-      },
+    const link = await this.prisma.customerOrder.findUnique({
+      where: { orderId },
+      include: { order: true },
     });
 
-    if (!order) {
+    if (!link || link.customerId !== userId) {
       throw new NotFoundException('Order not found');
     }
+
+    const order = link.order;
 
     if (order.status !== OrderStatus.CONFIRMED) {
       throw new BadRequestException(
@@ -563,25 +547,26 @@ export class OrdersService {
             name: true,
           },
         },
+        customerOrder: true,
       },
     });
 
-    if (!order) {
+    if (!order || !order.customerOrder) {
       throw new NotFoundException('Order not found');
     }
 
-    if (order.userId !== GUEST_USER_ID) {
+    if (order.customerOrder.customerId !== null) {
       throw new BadRequestException('This order has already been claimed');
     }
 
     const claimedOrder = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.order.update({
-        where: {
-          id: orderId,
-        },
-        data: {
-          userId,
-        },
+      await tx.customerOrder.update({
+        where: { orderId },
+        data: { customerId: userId },
+      });
+
+      return tx.order.findUniqueOrThrow({
+        where: { id: orderId },
         include: {
           items: true,
           store: {
@@ -593,21 +578,12 @@ export class OrdersService {
           },
         },
       });
-
-      await tx.customerOrder.create({
-        data: {
-          customerId: userId,
-          orderId: updated.id,
-        },
-      });
-
-      return updated;
     });
 
     if (claimedOrder.status === OrderStatus.FINISHED) {
       await this.awardOrderPoints({
         orderId: claimedOrder.id,
-        userId: claimedOrder.userId,
+        userId,
         createdBy: userId,
         purchaseAmount:
           Number(claimedOrder.total) - Number(claimedOrder.deliveryFee),
@@ -623,7 +599,7 @@ export class OrdersService {
 
   /**
    * Award purchase points for a FINISHED order, unless:
-   * - the order still belongs to the guest sentinel (nothing to award to), or
+   * - the order has no linked customer (guest order — nothing to award to), or
    * - points were already awarded for this order (idempotency guard, keyed
    *   on the order id via PointsTransaction.referenceId).
    *
@@ -633,12 +609,12 @@ export class OrdersService {
    */
   private async awardOrderPoints(params: {
     orderId: string;
-    userId: string;
+    userId: string | null;
     createdBy: string;
     purchaseAmount: number;
     storeOverride?: { storeId: string; storeName: string } | null;
   }) {
-    if (params.userId === GUEST_USER_ID) {
+    if (!params.userId) {
       return;
     }
 
@@ -717,8 +693,12 @@ export class OrdersService {
         store: {
           select: { id: true, name: true, address: true },
         },
-        user: {
-          select: { id: true, firstName: true, lastName: true, phone: true },
+        customerOrder: {
+          include: {
+            customer: {
+              select: { id: true, firstName: true, lastName: true, phone: true },
+            },
+          },
         },
       },
     });
@@ -911,9 +891,14 @@ export class OrdersService {
     });
 
     if (dto.status === OrderStatus.FINISHED) {
+      const link = await this.prisma.customerOrder.findUnique({
+        where: { orderId: updatedOrder.id },
+        select: { customerId: true },
+      });
+
       await this.awardOrderPoints({
         orderId: updatedOrder.id,
-        userId: updatedOrder.userId,
+        userId: link?.customerId ?? null,
         createdBy: caller.userId,
         purchaseAmount:
           Number(updatedOrder.total) - Number(updatedOrder.deliveryFee),

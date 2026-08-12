@@ -135,7 +135,11 @@ export class OrderReportService {
     divider();
 
     // Customer info.
-    labelValue('الاسم', `${order.user.firstName} ${order.user.lastName}`);
+    const customer = order.customerOrder?.customer;
+    labelValue(
+      'الاسم',
+      customer ? `${customer.firstName} ${customer.lastName}` : 'ضيف',
+    );
     labelValue('الهاتف', order.phone);
     if (order.type === 'DELIVERY' && order.address) {
       labelValue('العنوان', order.address);
